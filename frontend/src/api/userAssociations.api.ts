@@ -6,7 +6,6 @@ import type { AssignedRole } from '@/types/role'
 export interface AssignedDepartment {
   id: string
   name: string
-  code: string | null
   isPrimary: boolean
   assignedAt: string
 }

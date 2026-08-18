@@ -105,9 +105,7 @@ export function UserDetailPage() {
             <h1 className="text-lg font-semibold text-slate-900">{user.name}</h1>
             <StatusBadge isActive={user.isActive} />
           </div>
-          <p className="mt-0.5 text-sm text-slate-500">
-            @{user.username} · {user.email}
-          </p>
+          <p className="mt-0.5 text-sm text-slate-500">{user.email}</p>
         </div>
         <div className="flex shrink-0 gap-2">
           {can('Users', 'Update') &&
@@ -167,14 +165,8 @@ export function UserDetailPage() {
             <CardBody>
               <DescriptionList
                 fields={[
-                  { label: 'Job title', value: user.jobTitle },
-                  { label: 'Employee code', value: user.employeeCode },
-                  { label: 'Phone', value: user.phone },
                   { label: 'Status', value: user.status },
-                  { label: 'Verified', value: user.isVerified ? 'Yes' : 'No' },
                   { label: 'Last login', value: user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : null },
-                  { label: 'Timezone', value: user.timezone },
-                  { label: 'Locale', value: user.locale },
                   { label: 'Created', value: new Date(user.createdAt).toLocaleString() },
                 ]}
               />

@@ -85,12 +85,7 @@ export function DepartmentsListPage() {
   const columns = [
     columnHelper.accessor('name', {
       header: 'Department',
-      cell: (info) => (
-        <div>
-          <div className="font-medium text-slate-900">{info.getValue()}</div>
-          {info.row.original.code && <div className="text-xs text-slate-400">{info.row.original.code}</div>}
-        </div>
-      ),
+      cell: (info) => <div className="font-medium text-slate-900">{info.getValue()}</div>,
     }),
     columnHelper.accessor('sortOrder', { header: 'Sort order' }),
     columnHelper.accessor('isActive', {
@@ -188,7 +183,7 @@ export function DepartmentsListPage() {
         onPageSizeChange={setPageSize}
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name or code…"
+        searchPlaceholder="Search by name…"
         isLoading={query.isLoading}
         isError={query.isError}
         errorMessage={getErrorMessage(query.error)}

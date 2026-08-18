@@ -84,23 +84,12 @@ export function RolesListPage() {
   const columns = [
     columnHelper.accessor('name', {
       header: 'Role',
-      cell: (info) => (
-        <div>
-          <div className="font-medium text-slate-900">{info.getValue()}</div>
-          {info.row.original.code && <div className="text-xs text-slate-400">{info.row.original.code}</div>}
-        </div>
-      ),
+      cell: (info) => <div className="font-medium text-slate-900">{info.getValue()}</div>,
     }),
-    columnHelper.accessor('priority', { header: 'Priority' }),
     columnHelper.display({
       id: 'flags',
       header: 'Flags',
-      cell: (info) => (
-        <div className="flex gap-1">
-          {info.row.original.isSystem && <Badge tone="amber">System</Badge>}
-          {info.row.original.isDefault && <Badge tone="blue">Default</Badge>}
-        </div>
-      ),
+      cell: (info) => (info.row.original.isSystem ? <Badge tone="amber">System</Badge> : null),
     }),
     columnHelper.accessor('isActive', {
       header: 'Status',
@@ -209,7 +198,7 @@ export function RolesListPage() {
         onPageSizeChange={setPageSize}
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name or code…"
+        searchPlaceholder="Search by name…"
         isLoading={query.isLoading}
         isError={query.isError}
         errorMessage={getErrorMessage(query.error)}

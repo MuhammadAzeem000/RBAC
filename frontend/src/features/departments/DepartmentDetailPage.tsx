@@ -95,7 +95,6 @@ export function DepartmentDetailPage() {
             <h1 className="text-lg font-semibold text-slate-900">{department.name}</h1>
             <StatusBadge isActive={department.isActive} />
           </div>
-          {department.code && <p className="mt-0.5 text-sm text-slate-500">{department.code}</p>}
         </div>
         <div className="flex shrink-0 gap-2">
           {can('Departments', 'Update') &&

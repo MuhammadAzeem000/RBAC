@@ -87,15 +87,9 @@ export function UsersListPage() {
   const columns = [
     columnHelper.accessor('name', {
       header: 'User',
-      cell: (info) => (
-        <div>
-          <div className="font-medium text-slate-900">{info.getValue()}</div>
-          <div className="text-xs text-slate-400">@{info.row.original.username}</div>
-        </div>
-      ),
+      cell: (info) => <div className="font-medium text-slate-900">{info.getValue()}</div>,
     }),
     columnHelper.accessor('email', { header: 'Email' }),
-    columnHelper.accessor('jobTitle', { header: 'Job title', cell: (info) => info.getValue() ?? '—' }),
     columnHelper.accessor('isActive', {
       header: 'Status',
       cell: (info) => <StatusBadge isActive={info.getValue()} />,
@@ -191,7 +185,7 @@ export function UsersListPage() {
         onPageSizeChange={setPageSize}
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name, username, or email…"
+        searchPlaceholder="Search by name or email…"
         isLoading={query.isLoading}
         isError={query.isError}
         errorMessage={getErrorMessage(query.error)}

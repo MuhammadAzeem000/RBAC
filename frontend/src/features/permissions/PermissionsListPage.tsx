@@ -7,7 +7,7 @@ import { actionsApi } from '@/api/actions.api'
 import { modulesApi } from '@/api/modules.api'
 import { permissionsApi } from '@/api/permissions.api'
 import { ActiveFilterSelect } from '@/components/ui/ActiveFilterSelect'
-import { Badge, StatusBadge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { DataTable } from '@/components/ui/DataTable'
@@ -97,12 +97,7 @@ export function PermissionsListPage() {
   const columns = [
     columnHelper.accessor('name', {
       header: 'Permission',
-      cell: (info) => (
-        <div>
-          <div className="font-medium text-slate-900">{info.getValue()}</div>
-          <div className="font-mono text-xs text-slate-400">{info.row.original.code}</div>
-        </div>
-      ),
+      cell: (info) => <div className="font-medium text-slate-900">{info.getValue()}</div>,
     }),
     columnHelper.accessor('moduleId', {
       header: 'Module',
@@ -111,11 +106,6 @@ export function PermissionsListPage() {
     columnHelper.accessor('actionId', {
       header: 'Action',
       cell: (info) => actionNames.get(info.getValue()) ?? '—',
-    }),
-    columnHelper.display({
-      id: 'flags',
-      header: 'Flags',
-      cell: (info) => (info.row.original.isSystem ? <Badge tone="amber">System</Badge> : null),
     }),
     columnHelper.accessor('isActive', {
       header: 'Status',
@@ -141,7 +131,6 @@ export function PermissionsListPage() {
             <IconButton
               label="Delete permission"
               variant="danger"
-              disabled={info.row.original.isSystem}
               onClick={(e) => {
                 e.stopPropagation()
                 setDeleteTarget(info.row.original)
@@ -181,7 +170,7 @@ export function PermissionsListPage() {
         onPageSizeChange={setPageSize}
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name or code…"
+        searchPlaceholder="Search by name…"
         isLoading={query.isLoading}
         isError={query.isError}
         errorMessage={getErrorMessage(query.error)}

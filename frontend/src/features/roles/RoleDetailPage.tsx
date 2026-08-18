@@ -112,9 +112,7 @@ export function RoleDetailPage() {
             <h1 className="text-lg font-semibold text-slate-900">{role.name}</h1>
             <StatusBadge isActive={role.isActive} />
             {role.isSystem && <Badge tone="amber">System</Badge>}
-            {role.isDefault && <Badge tone="blue">Default</Badge>}
           </div>
-          {role.code && <p className="mt-0.5 text-sm text-slate-500">{role.code}</p>}
         </div>
         <div className="flex shrink-0 gap-2">
           {can('Roles', 'Update') &&
@@ -174,11 +172,7 @@ export function RoleDetailPage() {
           <Card>
             <CardBody>
               <DescriptionList
-                fields={[
-                  { label: 'Priority', value: role.priority },
-                  { label: 'Default for new users', value: role.isDefault ? 'Yes' : 'No' },
-                  { label: 'Created', value: new Date(role.createdAt).toLocaleString() },
-                ]}
+                fields={[{ label: 'Created', value: new Date(role.createdAt).toLocaleString() }]}
               />
               {role.description && (
                 <div className="mt-4 border-t border-slate-100 pt-4">

@@ -10,7 +10,6 @@ import type { Department } from '@/types/department'
 
 const departmentFormSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(150),
-  code: z.string().trim().max(50).optional().or(z.literal('')),
   description: z.string().trim().optional().or(z.literal('')),
   sortOrder: z.coerce.number().int().min(0).max(10_000),
 })
@@ -33,7 +32,6 @@ export function DepartmentForm({ formId, defaultValues, onSubmit }: DepartmentFo
     resolver: zodResolver(departmentFormSchema),
     defaultValues: {
       name: defaultValues?.name ?? '',
-      code: defaultValues?.code ?? '',
       description: defaultValues?.description ?? '',
       sortOrder: defaultValues?.sortOrder ?? 0,
     },
@@ -43,7 +41,6 @@ export function DepartmentForm({ formId, defaultValues, onSubmit }: DepartmentFo
     if (defaultValues) {
       reset({
         name: defaultValues.name,
-        code: defaultValues.code ?? '',
         description: defaultValues.description ?? '',
         sortOrder: defaultValues.sortOrder,
       })
@@ -54,9 +51,6 @@ export function DepartmentForm({ formId, defaultValues, onSubmit }: DepartmentFo
     <form id={formId} onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
       <FormField label="Name" required error={errors.name?.message}>
         {(id) => <Input id={id} invalid={Boolean(errors.name)} {...register('name')} />}
-      </FormField>
-      <FormField label="Code" error={errors.code?.message}>
-        {(id) => <Input id={id} invalid={Boolean(errors.code)} {...register('code')} />}
       </FormField>
       <FormField label="Sort order" error={errors.sortOrder?.message}>
         {(id) => <Input id={id} type="number" invalid={Boolean(errors.sortOrder)} {...register('sortOrder')} />}

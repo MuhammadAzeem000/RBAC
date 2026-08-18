@@ -1,7 +1,6 @@
 export interface Department {
   id: string
   name: string
-  code: string | null
   description: string | null
   status: string
   isActive: boolean
@@ -12,7 +11,6 @@ export interface Department {
 
 export interface CreateDepartmentInput {
   name: string
-  code?: string
   description?: string
   sortOrder?: number
 }

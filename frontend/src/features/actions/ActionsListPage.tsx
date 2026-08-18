@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { actionsApi } from '@/api/actions.api'
 import { ActiveFilterSelect } from '@/components/ui/ActiveFilterSelect'
-import { Badge, StatusBadge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { DataTable } from '@/components/ui/DataTable'
@@ -70,19 +70,9 @@ export function ActionsListPage() {
   const columns = [
     columnHelper.accessor('name', {
       header: 'Action',
-      cell: (info) => (
-        <div>
-          <div className="font-medium text-slate-900">{info.getValue()}</div>
-          <div className="font-mono text-xs text-slate-400">{info.row.original.code}</div>
-        </div>
-      ),
+      cell: (info) => <div className="font-medium text-slate-900">{info.getValue()}</div>,
     }),
     columnHelper.accessor('sortOrder', { header: 'Sort order' }),
-    columnHelper.display({
-      id: 'flags',
-      header: 'Flags',
-      cell: (info) => (info.row.original.isSystem ? <Badge tone="amber">System</Badge> : null),
-    }),
     columnHelper.accessor('isActive', {
       header: 'Status',
       cell: (info) => <StatusBadge isActive={info.getValue()} />,
@@ -107,7 +97,6 @@ export function ActionsListPage() {
             <IconButton
               label="Delete action"
               variant="danger"
-              disabled={info.row.original.isSystem}
               onClick={(e) => {
                 e.stopPropagation()
                 setDeleteTarget(info.row.original)
@@ -147,7 +136,7 @@ export function ActionsListPage() {
         onPageSizeChange={setPageSize}
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name or code…"
+        searchPlaceholder="Search by name…"
         isLoading={query.isLoading}
         isError={query.isError}
         errorMessage={getErrorMessage(query.error)}

@@ -16,7 +16,6 @@ const createPermissionFormSchema = z.object({
   moduleId: z.string().trim().min(1, 'Module is required'),
   actionId: z.string().trim().min(1, 'Action is required'),
   name: z.string().trim().min(1, 'Name is required').max(150),
-  code: z.string().trim().min(1, 'Code is required').max(150),
   description: z.string().trim().optional().or(z.literal('')),
 })
 
@@ -52,7 +51,6 @@ export function PermissionForm({ formId, mode, defaultValues, onSubmit }: Permis
       moduleId: defaultValues?.moduleId ?? '',
       actionId: defaultValues?.actionId ?? '',
       name: defaultValues?.name ?? '',
-      code: defaultValues?.code ?? '',
       description: defaultValues?.description ?? '',
     },
   })
@@ -63,7 +61,6 @@ export function PermissionForm({ formId, mode, defaultValues, onSubmit }: Permis
         moduleId: defaultValues.moduleId,
         actionId: defaultValues.actionId,
         name: defaultValues.name,
-        code: defaultValues.code,
         description: defaultValues.description ?? '',
       })
     }
@@ -101,9 +98,6 @@ export function PermissionForm({ formId, mode, defaultValues, onSubmit }: Permis
       )}
       <FormField label="Name" required error={errors.name?.message}>
         {(id) => <Input id={id} invalid={Boolean(errors.name)} {...register('name')} />}
-      </FormField>
-      <FormField label="Code" required hint="e.g. users.view" error={errors.code?.message}>
-        {(id) => <Input id={id} invalid={Boolean(errors.code)} {...register('code')} />}
       </FormField>
       <FormField label="Description" error={errors.description?.message}>
         {(id) => <Textarea id={id} invalid={Boolean(errors.description)} {...register('description')} />}

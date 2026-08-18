@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { actionsApi } from '@/api/actions.api'
 import { modulesApi } from '@/api/modules.api'
 import { permissionsApi } from '@/api/permissions.api'
-import { Badge, StatusBadge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -93,9 +93,7 @@ export function PermissionDetailPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-slate-900">{permission.name}</h1>
             <StatusBadge isActive={permission.isActive} />
-            {permission.isSystem && <Badge tone="amber">System</Badge>}
           </div>
-          <p className="mt-0.5 font-mono text-sm text-slate-500">{permission.code}</p>
         </div>
         <div className="flex shrink-0 gap-2">
           {can('Permissions', 'Update') && (
@@ -107,8 +105,6 @@ export function PermissionDetailPage() {
           {can('Permissions', 'Delete') && (
             <Button
               variant="danger-ghost"
-              disabled={permission.isSystem}
-              title={permission.isSystem ? "System permissions can't be deleted" : undefined}
               onClick={() => setDeleting(true)}
             >
               <Trash2 className="size-3.5" aria-hidden="true" />

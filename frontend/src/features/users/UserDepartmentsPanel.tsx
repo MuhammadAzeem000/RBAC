@@ -91,10 +91,7 @@ export function UserDepartmentsPanel({ userId }: UserDepartmentsPanelProps) {
         <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
           {assigned.map((department) => (
             <li key={department.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-              <div>
-                <p className="text-sm font-medium text-slate-800">{department.name}</p>
-                {department.code && <p className="text-xs text-slate-400">{department.code}</p>}
-              </div>
+              <p className="text-sm font-medium text-slate-800">{department.name}</p>
               <div className="flex items-center gap-2">
                 {department.isPrimary && <Badge tone="blue">Primary</Badge>}
                 {canManage && (

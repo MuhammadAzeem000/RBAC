@@ -87,10 +87,7 @@ export function RolePermissionsPanel({ roleId }: RolePermissionsPanelProps) {
         <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
           {assigned.map((permission) => (
             <li key={permission.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-              <div>
-                <p className="text-sm font-medium text-slate-800">{permission.name}</p>
-                <p className="font-mono text-xs text-slate-400">{permission.code}</p>
-              </div>
+              <p className="text-sm font-medium text-slate-800">{permission.name}</p>
               {canManage && (
                 <IconButton
                   label={`Revoke ${permission.name}`}
@@ -118,7 +115,7 @@ export function RolePermissionsPanel({ roleId }: RolePermissionsPanelProps) {
               <option value="">Select a permission…</option>
               {availablePermissions.map((permission) => (
                 <option key={permission.id} value={permission.id}>
-                  {permission.name} ({permission.code})
+                  {permission.name}
                 </option>
               ))}
             </Select>

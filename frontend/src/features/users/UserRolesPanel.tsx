@@ -3,7 +3,6 @@ import { Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { rolesApi } from '@/api/roles.api'
 import { userRolesApi } from '@/api/userAssociations.api'
-import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -86,12 +85,8 @@ export function UserRolesPanel({ userId }: UserRolesPanelProps) {
         <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
           {assigned.map((role) => (
             <li key={role.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-              <div>
-                <p className="text-sm font-medium text-slate-800">{role.name}</p>
-                {role.code && <p className="text-xs text-slate-400">{role.code}</p>}
-              </div>
+              <p className="text-sm font-medium text-slate-800">{role.name}</p>
               <div className="flex items-center gap-2">
-                <Badge tone="blue">Priority {role.priority}</Badge>
                 {canManage && (
                   <IconButton
                     label={`Revoke ${role.name}`}

@@ -3,7 +3,7 @@ import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { actionsApi } from '@/api/actions.api'
-import { Badge, StatusBadge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -77,9 +77,7 @@ export function ActionDetailPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-slate-900">{action.name}</h1>
             <StatusBadge isActive={action.isActive} />
-            {action.isSystem && <Badge tone="amber">System</Badge>}
           </div>
-          <p className="mt-0.5 font-mono text-sm text-slate-500">{action.code}</p>
         </div>
         <div className="flex shrink-0 gap-2">
           {can('Actions', 'Update') && (
@@ -89,12 +87,7 @@ export function ActionDetailPage() {
             </Button>
           )}
           {can('Actions', 'Delete') && (
-            <Button
-              variant="danger-ghost"
-              disabled={action.isSystem}
-              title={action.isSystem ? "System actions can't be deleted" : undefined}
-              onClick={() => setDeleting(true)}
-            >
+            <Button variant="danger-ghost" onClick={() => setDeleting(true)}>
               <Trash2 className="size-3.5" aria-hidden="true" />
               Delete
             </Button>
