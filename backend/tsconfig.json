@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",                          /* Target modern JavaScript */
+    "module": "commonjs",                        /* Standard module system for Node */
+    "rootDir": "./src",                          /* Where your source .ts files live */
+    "outDir": "./dist",                          /* Where compiled .js files will go */
+    "allowJs": true,
+    "resolveJsonModule": true,                            /* Allows migrating JS files gradually */
+    "esModuleInterop": true,                     /* Emits extra JavaScript for module compliance */
+    "forceConsistentCasingInFileNames": true,    /* Ensures strict file naming rules */
+    "strict": true,                              /* Enables strict type-checking options */
+    "skipLibCheck": true,
+    "types":["node", "jest"]                     /* Skip type checking of declaration files */
+  },
+  "include": ["src/**/*", "src/config", "src/config"],              /* Files to compile */
+  "exclude": ["node_modules", "dist"]            /* Files to ignore */
+}
