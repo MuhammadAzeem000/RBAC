@@ -1,14 +1,52 @@
-FROM node:20-alpine
+# Build context is the repo root (see docker-compose.yml), so all COPY paths
+# below are relative to the repo root, not this file's directory.
 
+# ---- Build stage: compile TypeScript + generate the Prisma client ----
+FROM node:20-alpine AS build
+RUN apk add --no-cache openssl
 WORKDIR /app
 
-COPY package*.json ./
+COPY backend/package*.json ./
+RUN npm ci
 
-RUN npm install --omit=dev
+COPY backend/tsconfig.json backend/prisma.config.ts ./
+COPY backend/prisma ./prisma
+COPY backend/src ./src
 
-COPY . .
+# prisma.config.ts loads src/config/env.ts, which strictly validates every
+# runtime env var (JWT secrets, DB credentials) via zod — none of which
+# exist yet at build time (they're only injected at container runtime).
+# `prisma generate` never opens a DB connection or reads these values for
+# anything real, so placeholders here just satisfy that validation; they
+# don't carry over to the production stage below.
+ENV DB_HOST=build DB_PORT=5432 DB_USER=build DB_PASSWORD=build DB_NAME=build \
+    JWT_ACCESS_SECRET=build_time_placeholder_not_used_at_runtime_000000 \
+    JWT_REFRESH_SECRET=build_time_placeholder_not_used_at_runtime_111111
 
+# Emits into src/generated/prisma (per schema.prisma's generator output),
+# so it gets picked up by the tsc build below like any other source file.
+RUN npx prisma generate
+RUN npm run build
+
+# ---- Production stage ----
+FROM node:20-alpine AS production
+RUN apk add --no-cache openssl
+WORKDIR /app
 ENV NODE_ENV=production
-EXPOSE 3000
 
-CMD ["npm", "start"]
+COPY backend/package*.json ./
+RUN npm ci --omit=dev
+
+COPY --from=build /app/dist ./dist
+# prisma.config.ts imports ./src/config/env at runtime (Prisma's config
+# loader transpiles it on the fly), so the source tree must ship alongside dist.
+COPY --from=build /app/src ./src
+COPY --from=build /app/prisma ./prisma
+COPY backend/prisma.config.ts ./
+
+EXPOSE 4000
+
+# Applies any pending migrations before starting — safe to run on every
+# boot since `migrate deploy` is a non-interactive, idempotent no-op when
+# the database is already up to date.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
