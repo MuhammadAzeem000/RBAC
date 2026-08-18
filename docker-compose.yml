@@ -19,6 +19,29 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    ports:
+      # Management UI — inspect exchanges/queues/messages at localhost:15672
+      # (guest/guest). AMQP port 5672 itself isn't published: only backend
+      # and notification-service need it, over the compose network.
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      # Web inbox — every email notification-service sends lands here
+      # instead of a real mailbox. SMTP port 1025 isn't published: only
+      # notification-service needs it, over the compose network.
+      - "8025:8025"
+
   backend:
     build:
       context: .
@@ -26,6 +49,8 @@ services:
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     environment:
       PORT: 4000
@@ -40,8 +65,27 @@ services:
       JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
     ports:
       - "4000:4000"
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      PORT: 4100
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://rabbitmq:5672
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: "${SMTP_FROM:-RBAC Console <noreply@rbac.local>}"
+    ports:
+      - "4100:4100"
 
   frontend:
     build:

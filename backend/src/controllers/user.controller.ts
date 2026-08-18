@@ -3,6 +3,8 @@ import { z } from "zod";
 import { createUserSchema, updateUserSchema, userListQuerySchema } from "../interfaces/user";
 import * as auditLogService from "../services/auditLog.service";
 import * as userService from "../services/user.service";
+import { publishEvent } from "../events/eventBus.service";
+import { USER_CREATED_ROUTING_KEY } from "../events/topology";
 import { parseBigIntId, parseQuery } from "../utils";
 
 function parseId(req: Request, res: Response): bigint | null {
@@ -47,6 +49,14 @@ export async function createUser(req: Request, res: Response) {
     action: "user.create",
     targetType: "user",
     targetId: user.id,
+  });
+  // Fire-and-forget: the welcome email is a side effect of user creation,
+  // not a precondition for it — publishEvent() never throws, so a broker
+  // outage can't turn into a failed create-user request.
+  void publishEvent(USER_CREATED_ROUTING_KEY, {
+    userId: user.id.toString(),
+    name: user.name,
+    email: user.email,
   });
   res.status(201).json(user);
 }

@@ -7,6 +7,7 @@ import { actionRouter } from "./routes/action.routes";
 import { auditLogRouter } from "./routes/auditLog.routes";
 import { authRouter } from "./routes/auth.routes";
 import { departmentRouter } from "./routes/department.routes";
+import { connectEventBus } from "./events/eventBus.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { authenticate } from "./middlewares/authenticate";
 import { moduleRouter } from "./routes/module.routes";
@@ -47,3 +48,8 @@ app.use(errorHandler);
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
+// Fire-and-forget: connects in the background with its own retry loop, so a
+// slow-starting or temporarily unreachable broker never delays the server
+// from accepting requests.
+void connectEventBus();

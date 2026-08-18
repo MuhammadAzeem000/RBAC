@@ -21,6 +21,10 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"),
   CORS_ORIGIN: z.string().default("http://localhost:5173,http://localhost:5174"),
+  // Defaulted (not required) so `npm run dev` outside Docker still starts
+  // without RabbitMQ running — the event bus just retries in the background
+  // and logs a warning; nothing that depends on it blocks the request path.
+  RABBITMQ_URL: z.string().min(1).default("amqp://localhost:5672"),
 });
 
 const parsed = envSchema.parse(process.env);
