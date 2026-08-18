@@ -4,6 +4,8 @@ import { LoginPage } from '@/features/auth/LoginPage'
 import { RegisterPage } from '@/features/auth/RegisterPage'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { IncidentsListPage } from '@/features/incidents/IncidentsListPage'
+import { IncidentDetailPage } from '@/features/incidents/IncidentDetailPage'
 import { UsersListPage } from '@/features/users/UsersListPage'
 import { UserDetailPage } from '@/features/users/UserDetailPage'
 import { DepartmentsListPage } from '@/features/departments/DepartmentsListPage'
@@ -28,6 +30,9 @@ function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
+
+          <Route path="incidents" element={<IncidentsListPage />} />
+          <Route path="incidents/:id" element={<IncidentDetailPage />} />
 
           <Route path="users" element={<UsersListPage />} />
           <Route path="users/:id" element={<UserDetailPage />} />

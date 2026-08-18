@@ -16,9 +16,15 @@ services:
       POSTGRES_DB: ${DB_NAME:-rbac_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Not published to the host on purpose — only identity-service needs to
-    # reach it, over the compose network by service name. Uncomment to
-    # inspect it directly with a local client (e.g. psql, a GUI tool):
+      # Creates incident_db (incident-service's own, separate database) on a
+      # FRESH volume only — the official postgres image only runs
+      # docker-entrypoint-initdb.d scripts on first init. An already-existing
+      # volume needs the database created manually once (see the script).
+      - ./backend/postgres-init:/docker-entrypoint-initdb.d
+    # Not published to the host on purpose — only identity-service and
+    # incident-service need to reach it, over the compose network by service
+    # name. Uncomment to inspect it directly with a local client (e.g. psql,
+    # a GUI tool):
     # ports:
     #   - "5432:5432"
     healthcheck:
@@ -89,10 +95,50 @@ services:
       retries: 10
       start_period: 10s
 
-  # Reverse proxy: the single origin the frontend talks to. identity-service
-  # is the only backend behind it right now — kept as its own service so a
-  # future microservice (e.g. incident-service, integration-service) can be
-  # added behind the gateway without touching the frontend again.
+  # SOAR incident management MVP (see SOAR_Incident_Management_MVP.pdf) —
+  # incidents, alerts, tasks, evidence, comments, playbook runs, and
+  # timeline/audit. Owns its own database (incident_db, same Postgres server
+  # as identity-service but a genuinely separate database — no shared
+  # schema). Has no RBAC tables of its own; every request's permissions are
+  # checked by calling identity-service's GET /api/auth/me/modules with the
+  # caller's own access token, which is why it depends on identity-service
+  # being up, not just Postgres/RabbitMQ.
+  incident-service:
+    build:
+      context: .
+      dockerfile: backend/services/incident-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    environment:
+      PORT: 4200
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: incident_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4200:4200"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4200/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Reverse proxy: the single origin the frontend talks to. Routes
+  # "/api/v1/*" (incident-service's documented REST surface) to
+  # incident-service and everything else under "/api" to identity-service.
   api-gateway:
     build:
       context: .
@@ -101,9 +147,12 @@ services:
     depends_on:
       identity-service:
         condition: service_healthy
+      incident-service:
+        condition: service_healthy
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
+      INCIDENT_SERVICE_URL: http://incident-service:4200
     ports:
       - "8090:8000"
 

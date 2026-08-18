@@ -10,7 +10,9 @@ import { departmentRouter } from "./routes/department.routes";
 import { connectEventBus } from "./events/eventBus.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { authenticate } from "./middlewares/authenticate";
+import { MODULE_NAMES } from "./constants/rbac";
 import { moduleRouter } from "./routes/module.routes";
+import { ensureModuleSeeded } from "./services/moduleSeed.service";
 import { notFound } from "./middlewares/notFound";
 import { permissionRouter } from "./routes/permission.routes";
 import { roleRouter } from "./routes/role.routes";
@@ -53,3 +55,8 @@ app.listen(PORT, () => {
 // slow-starting or temporarily unreachable broker never delays the server
 // from accepting requests.
 void connectEventBus();
+
+// Backfills the Incidents module/permissions for systems that were already
+// bootstrapped before incident-service existed — safe to run on every boot,
+// idempotent (find-or-create), and cheap. Does not block request handling.
+void ensureModuleSeeded(MODULE_NAMES.INCIDENTS, 8);

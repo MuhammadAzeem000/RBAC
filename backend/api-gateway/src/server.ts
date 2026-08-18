@@ -8,12 +8,21 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
 
-// identity-service is the only backend right now, so this is a single
-// pass-through — kept as the frontend's one entry point in case another
-// service (incident-service, integration-service, ...) joins behind the
-// gateway later. Express strips the app.use() mount path before the proxy
-// ever sees the request, and http-proxy-middleware v3 doesn't restore it
-// automatically, so pathRewrite adds "/api" back on the way out.
+// Express strips the app.use() mount path before the proxy ever sees the
+// request, and http-proxy-middleware v3 doesn't restore it automatically,
+// so pathRewrite adds the prefix back on the way out. Order matters: the
+// more specific "/api/v1" prefix (incident-service's documented REST
+// surface) must be registered before the catch-all "/api" one
+// (identity-service) below, or it would never be reached.
+app.use(
+  "/api/v1",
+  createProxyMiddleware({
+    target: env.INCIDENT_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/" },
+  }),
+);
+
 app.use(
   "/api",
   createProxyMiddleware({
@@ -25,5 +34,6 @@ app.use(
 
 app.listen(env.PORT, () => {
   console.log(`api-gateway listening on port ${env.PORT}`);
-  console.log(`  /api/* -> ${env.IDENTITY_SERVICE_URL}`);
+  console.log(`  /api/v1/* -> ${env.INCIDENT_SERVICE_URL}`);
+  console.log(`  /api/*    -> ${env.IDENTITY_SERVICE_URL}`);
 });

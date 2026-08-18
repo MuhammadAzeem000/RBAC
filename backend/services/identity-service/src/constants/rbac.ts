@@ -12,6 +12,7 @@ export const MODULE_NAMES = {
   ACTIONS: "Actions",
   PERMISSIONS: "Permissions",
   AUDIT_LOGS: "Audit Logs",
+  INCIDENTS: "Incidents",
 } as const;
 
 export const ACTION_NAMES = {

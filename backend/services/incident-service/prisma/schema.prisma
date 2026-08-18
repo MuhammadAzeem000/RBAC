@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Aggregate root. owner_user_id/created_by/updated_by reference identity-service's
+// User.id, but this service has no FK to identity-service's database (separate
+// database, separate service) — those are plain BigInt columns, resolved to
+// display names by the frontend calling identity-service directly.
+model Incident {
+  id BigInt @id @default(autoincrement())
+
+  externalId  String? @map("external_id") @db.VarChar(100)
+  title       String  @db.VarChar(255)
+  description String? @db.Text
+  category    String? @db.VarChar(100)
+  severity    String  @db.VarChar(20)
+  priority    String? @db.VarChar(20)
+  status      String  @default("new") @db.VarChar(30)
+  tags        Json?   @db.Json
+
+  source      String? @db.VarChar(100)
+  ownerUserId BigInt? @map("owner_user_id")
+
+  detectedAt DateTime? @map("detected_at") @db.Timestamp(6)
+  dueAt      DateTime? @map("due_at") @db.Timestamp(6)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamp(6)
+  closedAt   DateTime? @map("closed_at") @db.Timestamp(6)
+
+  closureCode       String? @map("closure_code") @db.VarChar(50)
+  resolutionSummary String? @map("resolution_summary") @db.Text
+  rootCause         String? @map("root_cause") @db.Text
+
+  createdBy BigInt  @map("created_by")
+  updatedBy BigInt? @map("updated_by")
+  version   Int     @default(1)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  alerts         Alert[]
+  tasks          Task[]
+  evidence       Evidence[]
+  comments       Comment[]
+  playbookRuns   PlaybookRun[]
+  timelineEvents TimelineEvent[]
+
+  @@index([status])
+  @@index([severity])
+  @@index([ownerUserId])
+  @@index([createdAt])
+  @@map("incidents")
+}
+
+// Immutable source context once attached — analyst annotations belong to the
+// incident (comments/notes), never to the alert row itself.
+model Alert {
+  id         BigInt @id @default(autoincrement())
+  incidentId BigInt @map("incident_id")
+
+  externalAlertId String  @map("external_alert_id") @db.VarChar(150)
+  source          String  @db.VarChar(100)
+  summary         String  @db.Text
+  rawPayload      Json?   @map("raw_payload") @db.Json
+
+  attachedBy BigInt   @map("attached_by")
+  attachedAt DateTime @default(now()) @map("attached_at") @db.Timestamp(6)
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId])
+  @@map("incident_alerts")
+}
+
+model Task {
+  id         BigInt @id @default(autoincrement())
+  incidentId BigInt @map("incident_id")
+
+  title          String    @db.VarChar(255)
+  description    String?   @db.Text
+  assigneeUserId BigInt?   @map("assignee_user_id")
+  dueDate        DateTime? @map("due_date") @db.Timestamp(6)
+  status         String    @default("open") @db.VarChar(20)
+
+  completedAt DateTime? @map("completed_at") @db.Timestamp(6)
+  completedBy BigInt?   @map("completed_by")
+
+  createdBy BigInt   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId])
+  @@map("incident_tasks")
+}
+
+// Metadata + a storage reference only — actual binary content is deliberately
+// out of scope for this MVP (spec: "do not place large binaries in the
+// incident relational record"); storageRef is just an opaque string today.
+model Evidence {
+  id         BigInt @id @default(autoincrement())
+  incidentId BigInt @map("incident_id")
+
+  filename   String  @db.VarChar(255)
+  fileType   String? @map("file_type") @db.VarChar(100)
+  sizeBytes  BigInt? @map("size_bytes")
+  storageRef String  @map("storage_ref") @db.VarChar(500)
+  checksum   String? @db.VarChar(128)
+  provenance String? @db.Text
+
+  uploadedBy BigInt   @map("uploaded_by")
+  uploadedAt DateTime @default(now()) @map("uploaded_at") @db.Timestamp(6)
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId])
+  @@map("incident_evidence")
+}
+
+model Comment {
+  id         BigInt @id @default(autoincrement())
+  incidentId BigInt @map("incident_id")
+
+  authorUserId BigInt @map("author_user_id")
+  body         String @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  editedAt  DateTime? @map("edited_at") @db.Timestamp(6)
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId])
+  @@map("incident_comments")
+}
+
+// No real SOAR automation engine exists in this codebase — this is a
+// recorded, simulated execution: starting a run schedules a deterministic
+// transition to succeeded/failed shortly after, so the API contract, audit
+// trail, and UI can all be exercised honestly without pretending to
+// integrate a real engine.
+model PlaybookRun {
+  id         BigInt @id @default(autoincrement())
+  incidentId BigInt @map("incident_id")
+
+  playbookKey     String @map("playbook_key") @db.VarChar(100)
+  playbookVersion String @default("1.0") @map("playbook_version") @db.VarChar(20)
+
+  state String @default("pending_approval") @db.VarChar(30)
+
+  requiresApproval Boolean   @default(false) @map("requires_approval")
+  approvedBy       BigInt?   @map("approved_by")
+  approvedAt       DateTime? @map("approved_at") @db.Timestamp(6)
+
+  initiatedBy BigInt    @map("initiated_by")
+  startedAt   DateTime? @map("started_at") @db.Timestamp(6)
+  endedAt     DateTime? @map("ended_at") @db.Timestamp(6)
+
+  inputs         Json?   @db.Json
+  outputsSummary String? @map("outputs_summary") @db.Text
+  errorMessage   String? @map("error_message") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId])
+  @@map("incident_playbook_runs")
+}
+
+// Append-only by convention — no route ever updates or deletes a row here.
+// This IS the incident's audit trail as well as its UX activity feed (the
+// spec explicitly describes Timeline Event as serving both purposes).
+model TimelineEvent {
+  id         BigInt @id @default(autoincrement())
+  incidentId BigInt @map("incident_id")
+
+  eventType   String  @map("event_type") @db.VarChar(50)
+  actorUserId BigInt? @map("actor_user_id")
+  summary     String  @db.Text
+  metadata    Json?   @db.Json
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId])
+  @@index([createdAt])
+  @@map("incident_timeline_events")
+}
