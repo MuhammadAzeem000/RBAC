@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { bigIntId } from "../interfaces/common";
+import * as auditLogService from "../services/auditLog.service";
 import * as roleService from "../services/role.service";
 import * as userRoleService from "../services/userRole.service";
 import * as userService from "../services/user.service";
@@ -54,6 +55,13 @@ export async function assignRoleToUser(req: Request, res: Response) {
   }
 
   const assignment = await userRoleService.assignRoleToUser(userId, role.id);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "user.role.assign",
+    targetType: "user",
+    targetId: userId,
+    metadata: { roleId: role.id.toString() },
+  });
   res.status(201).json(assignment);
 }
 
@@ -70,5 +78,12 @@ export async function revokeRoleFromUser(req: Request, res: Response) {
     res.status(404).json({ error: "Role assignment not found" });
     return;
   }
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "user.role.revoke",
+    targetType: "user",
+    targetId: userId,
+    metadata: { roleId: roleId.toString() },
+  });
   res.status(204).send();
 }

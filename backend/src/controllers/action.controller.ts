@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { actionListQuerySchema, createActionSchema, updateActionSchema } from "../interfaces/action";
 import * as actionService from "../services/action.service";
+import * as auditLogService from "../services/auditLog.service";
 import { parseBigIntId, parseQuery } from "../utils";
 
 function parseId(req: Request, res: Response): bigint | null {
@@ -41,6 +42,12 @@ export async function createAction(req: Request, res: Response) {
   }
 
   const action = await actionService.createAction(result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "action.create",
+    targetType: "action",
+    targetId: action.id,
+  });
   res.status(201).json(action);
 }
 
@@ -55,6 +62,12 @@ export async function updateAction(req: Request, res: Response) {
   }
 
   const action = await actionService.updateAction(id, result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "action.update",
+    targetType: "action",
+    targetId: action.id,
+  });
   res.json(action);
 }
 
@@ -70,5 +83,11 @@ export async function deleteAction(req: Request, res: Response) {
   }
 
   await actionService.deleteAction(id);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "action.delete",
+    targetType: "action",
+    targetId: id,
+  });
   res.status(204).send();
 }

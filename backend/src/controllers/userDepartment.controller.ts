@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { bigIntId } from "../interfaces/common";
+import * as auditLogService from "../services/auditLog.service";
 import * as departmentService from "../services/department.service";
 import * as userDepartmentService from "../services/userDepartment.service";
 import * as userService from "../services/user.service";
@@ -61,6 +62,13 @@ export async function assignDepartmentToUser(req: Request, res: Response) {
     department.id,
     result.data.isPrimary,
   );
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "user.department.assign",
+    targetType: "user",
+    targetId: userId,
+    metadata: { departmentId: department.id.toString() },
+  });
   res.status(201).json(assignment);
 }
 
@@ -77,5 +85,12 @@ export async function revokeDepartmentFromUser(req: Request, res: Response) {
     res.status(404).json({ error: "Department assignment not found" });
     return;
   }
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "user.department.revoke",
+    targetType: "user",
+    targetId: userId,
+    metadata: { departmentId: departmentId.toString() },
+  });
   res.status(204).send();
 }

@@ -19,6 +19,8 @@ jest.mock("../config/prisma", () => ({
   },
 }));
 
+jest.mock("../services/auditLog.service");
+
 const mockedPrisma = prisma as unknown as {
   module: {
     findMany: jest.Mock;
@@ -111,7 +113,7 @@ describe("module.controller", () => {
   it("deleteModule proceeds when the module has no permissions", async () => {
     mockedPrisma.permission.count.mockResolvedValue(0);
     mockedPrisma.module.update.mockResolvedValue({ id: 1n });
-    const req = { params: { id: "1" } } as unknown as Request;
+    const req = { params: { id: "1" }, auth: { userId: 9n, email: "alice@example.com" } } as unknown as Request;
     const res = mockRes();
 
     await moduleController.deleteModule(req, res);

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { createUserSchema, updateUserSchema, userListQuerySchema } from "../interfaces/user";
+import * as auditLogService from "../services/auditLog.service";
 import * as userService from "../services/user.service";
 import { parseBigIntId, parseQuery } from "../utils";
 
@@ -41,6 +42,12 @@ export async function createUser(req: Request, res: Response) {
   }
 
   const user = await userService.createUser(result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "user.create",
+    targetType: "user",
+    targetId: user.id,
+  });
   res.status(201).json(user);
 }
 
@@ -60,6 +67,12 @@ export async function updateUser(req: Request, res: Response) {
   }
 
   const user = await userService.updateUser(id, result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "user.update",
+    targetType: "user",
+    targetId: user.id,
+  });
   res.json(user);
 }
 
@@ -73,5 +86,11 @@ export async function deleteUser(req: Request, res: Response) {
   }
 
   await userService.deleteUser(id);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "user.delete",
+    targetType: "user",
+    targetId: id,
+  });
   res.status(204).send();
 }

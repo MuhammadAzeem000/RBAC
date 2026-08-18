@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { createDepartmentSchema, departmentListQuerySchema, updateDepartmentSchema } from "../interfaces/department";
+import * as auditLogService from "../services/auditLog.service";
 import * as departmentService from "../services/department.service";
 import * as userDepartmentService from "../services/userDepartment.service";
 import { parseBigIntId, parseQuery } from "../utils";
@@ -42,6 +43,12 @@ export async function createDepartment(req: Request, res: Response) {
   }
 
   const department = await departmentService.createDepartment(result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "department.create",
+    targetType: "department",
+    targetId: department.id,
+  });
   res.status(201).json(department);
 }
 
@@ -64,6 +71,12 @@ export async function updateDepartment(req: Request, res: Response) {
   }
 
   const department = await departmentService.updateDepartment(id, result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "department.update",
+    targetType: "department",
+    targetId: department.id,
+  });
   res.json(department);
 }
 
@@ -84,5 +97,11 @@ export async function deleteDepartment(req: Request, res: Response) {
   }
 
   await departmentService.deleteDepartment(id);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "department.delete",
+    targetType: "department",
+    targetId: id,
+  });
   res.status(204).send();
 }

@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { KeyRound, LayoutDashboard, LayoutGrid, Network, ShieldCheck, Users, Zap } from 'lucide-react'
+import { KeyRound, LayoutDashboard, LayoutGrid, Network, ScrollText, ShieldCheck, Users, Zap } from 'lucide-react'
 import { useMyEnabledModuleNames } from '@/hooks/useMyModules'
 
 export interface NavItem {
@@ -16,6 +16,7 @@ const MODULE_GATED_ITEMS: { moduleName: string; item: NavItem }[] = [
   { moduleName: 'Modules', item: { to: '/modules', label: 'Modules', icon: LayoutGrid } },
   { moduleName: 'Actions', item: { to: '/actions', label: 'Actions', icon: Zap } },
   { moduleName: 'Permissions', item: { to: '/permissions', label: 'Permissions', icon: KeyRound } },
+  { moduleName: 'Audit Logs', item: { to: '/audit-logs', label: 'Audit Logs', icon: ScrollText } },
 ]
 
 export function useNavItems(): NavItem[] {

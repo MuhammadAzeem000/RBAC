@@ -16,6 +16,7 @@ import { ActionsListPage } from '@/features/actions/ActionsListPage'
 import { ActionDetailPage } from '@/features/actions/ActionDetailPage'
 import { PermissionsListPage } from '@/features/permissions/PermissionsListPage'
 import { PermissionDetailPage } from '@/features/permissions/PermissionDetailPage'
+import { AuditLogsListPage } from '@/features/auditLogs/AuditLogsListPage'
 import { NotFoundPage } from '@/features/NotFoundPage'
 
 function App() {
@@ -45,6 +46,8 @@ function App() {
 
           <Route path="permissions" element={<PermissionsListPage />} />
           <Route path="permissions/:id" element={<PermissionDetailPage />} />
+
+          <Route path="audit-logs" element={<AuditLogsListPage />} />
         </Route>
       </Route>
 

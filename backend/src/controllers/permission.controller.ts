@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { createPermissionSchema, permissionListQuerySchema, updatePermissionSchema } from "../interfaces/permission";
+import * as auditLogService from "../services/auditLog.service";
 import * as permissionService from "../services/permission.service";
 import { parseBigIntId, parseQuery } from "../utils";
 
@@ -41,6 +42,12 @@ export async function createPermission(req: Request, res: Response) {
   }
 
   const permission = await permissionService.createPermission(result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "permission.create",
+    targetType: "permission",
+    targetId: permission.id,
+  });
   res.status(201).json(permission);
 }
 
@@ -55,6 +62,12 @@ export async function updatePermission(req: Request, res: Response) {
   }
 
   const permission = await permissionService.updatePermission(id, result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "permission.update",
+    targetType: "permission",
+    targetId: permission.id,
+  });
   res.json(permission);
 }
 
@@ -70,5 +83,11 @@ export async function deletePermission(req: Request, res: Response) {
   }
 
   await permissionService.deletePermission(id);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "permission.delete",
+    targetType: "permission",
+    targetId: id,
+  });
   res.status(204).send();
 }

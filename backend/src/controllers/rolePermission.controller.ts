@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { bigIntId } from "../interfaces/common";
+import * as auditLogService from "../services/auditLog.service";
 import * as permissionService from "../services/permission.service";
 import * as roleService from "../services/role.service";
 import * as rolePermissionService from "../services/rolePermission.service";
@@ -54,6 +55,13 @@ export async function assignPermissionToRole(req: Request, res: Response) {
   }
 
   const assignment = await rolePermissionService.assignPermissionToRole(roleId, permission.id);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "role.permission.assign",
+    targetType: "role",
+    targetId: roleId,
+    metadata: { permissionId: permission.id.toString() },
+  });
   res.status(201).json(assignment);
 }
 
@@ -70,5 +78,12 @@ export async function revokePermissionFromRole(req: Request, res: Response) {
     res.status(404).json({ error: "Permission assignment not found" });
     return;
   }
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "role.permission.revoke",
+    targetType: "role",
+    targetId: roleId,
+    metadata: { permissionId: permissionId.toString() },
+  });
   res.status(204).send();
 }

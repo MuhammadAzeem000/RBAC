@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { createRoleSchema, roleListQuerySchema, updateRoleSchema } from "../interfaces/role";
+import * as auditLogService from "../services/auditLog.service";
 import * as roleService from "../services/role.service";
 import * as userRoleService from "../services/userRole.service";
 import { parseBigIntId, parseQuery } from "../utils";
@@ -42,6 +43,12 @@ export async function createRole(req: Request, res: Response) {
   }
 
   const role = await roleService.createRole(result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "role.create",
+    targetType: "role",
+    targetId: role.id,
+  });
   res.status(201).json(role);
 }
 
@@ -61,6 +68,12 @@ export async function updateRole(req: Request, res: Response) {
   }
 
   const role = await roleService.updateRole(id, result.data);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "role.update",
+    targetType: "role",
+    targetId: role.id,
+  });
   res.json(role);
 }
 
@@ -79,5 +92,11 @@ export async function deleteRole(req: Request, res: Response) {
   }
 
   await roleService.deleteRole(id);
+  await auditLogService.recordAuditLog({
+    actorUserId: req.auth!.userId,
+    action: "role.delete",
+    targetType: "role",
+    targetId: id,
+  });
   res.status(204).send();
 }

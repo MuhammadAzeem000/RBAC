@@ -13,6 +13,7 @@ jest.mock("../services/role.service");
 jest.mock("../services/permission.service");
 jest.mock("../services/userRole.service");
 jest.mock("../services/rolePermission.service");
+jest.mock("../services/auditLog.service");
 
 function mockRes() {
   const res = {} as Response;
@@ -40,7 +41,11 @@ describe("userRole associations", () => {
     (roleService.getRoleById as jest.Mock).mockResolvedValue({ id: 2n });
     (userRoleService.assignRoleToUser as jest.Mock).mockResolvedValue({ userId: 1n, roleId: 2n });
 
-    const req = { params: { id: "1" }, body: { roleId: "2" } } as unknown as Request;
+    const req = {
+      params: { id: "1" },
+      body: { roleId: "2" },
+      auth: { userId: 9n, email: "alice@example.com" },
+    } as unknown as Request;
     const res = mockRes();
 
     await userRoleController.assignRoleToUser(req, res);
@@ -107,7 +112,11 @@ describe("rolePermission associations", () => {
       permissionId: 2n,
     });
 
-    const req = { params: { id: "1" }, body: { permissionId: "2" } } as unknown as Request;
+    const req = {
+      params: { id: "1" },
+      body: { permissionId: "2" },
+      auth: { userId: 9n, email: "alice@example.com" },
+    } as unknown as Request;
     const res = mockRes();
 
     await rolePermissionController.assignPermissionToRole(req, res);

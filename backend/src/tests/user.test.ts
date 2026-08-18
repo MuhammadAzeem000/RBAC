@@ -16,6 +16,8 @@ jest.mock("../config/prisma", () => ({
   },
 }));
 
+jest.mock("../services/auditLog.service");
+
 const mockedPrisma = prisma as unknown as {
   user: {
     findMany: jest.Mock;
