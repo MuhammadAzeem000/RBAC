@@ -1,8 +1,8 @@
 {
-  "name": "backend",
+  "name": "identity-service",
   "version": "1.0.0",
-  "description": "Simple backend Docker App",
-  "main": "server.js",
+  "description": "Auth (register/login/refresh/logout/me) plus users, departments, roles, permissions, modules, actions, and audit logs — the RBAC/identity microservice",
+  "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",

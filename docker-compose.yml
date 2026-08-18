@@ -1,3 +1,11 @@
+# Backend microservices live under backend/services/<name> (each with its own
+# Dockerfile, package.json, and codebase). Add a new microservice by giving
+# it a folder there and a block below, following the same shape as the ones
+# already here — no other structural change should be needed. The one
+# exception is backend/api-gateway/, which sits alongside services/ (not
+# inside it) since it's the entry point in front of all of them, not a peer
+# domain service itself. The frontend only ever talks to api-gateway; it
+# never calls identity-service directly.
 services:
   postgres:
     image: postgres:15-alpine
@@ -8,9 +16,9 @@ services:
       POSTGRES_DB: ${DB_NAME:-rbac_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Not published to the host on purpose — only backend needs to reach it,
-    # over the compose network by service name. Uncomment to inspect it
-    # directly with a local client (e.g. psql, a GUI tool):
+    # Not published to the host on purpose — only identity-service needs to
+    # reach it, over the compose network by service name. Uncomment to
+    # inspect it directly with a local client (e.g. psql, a GUI tool):
     # ports:
     #   - "5432:5432"
     healthcheck:
@@ -25,7 +33,8 @@ services:
     ports:
       # Management UI — inspect exchanges/queues/messages at localhost:15672
       # (guest/guest). AMQP port 5672 itself isn't published: only backend
-      # and notification-service need it, over the compose network.
+      # microservices need it, over the compose network — any future service
+      # that needs to publish/consume events binds to it the same way.
       - "15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
@@ -42,10 +51,15 @@ services:
       # notification-service needs it, over the compose network.
       - "8025:8025"
 
-  backend:
+  # Auth (register/login/refresh/logout/me) plus users, departments, roles,
+  # permissions, modules, actions, audit logs — kept as one service since
+  # they're all relationally coupled through one Postgres schema (foreign
+  # keys everywhere). Publishes domain events (e.g. "user.created") to
+  # RabbitMQ for other services to react to.
+  identity-service:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: backend/services/identity-service/Dockerfile
     restart: unless-stopped
     depends_on:
       postgres:
@@ -68,11 +82,37 @@ services:
       RABBITMQ_URL: amqp://rabbitmq:5672
     ports:
       - "4000:4000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
+  # Reverse proxy: the single origin the frontend talks to. identity-service
+  # is the only backend behind it right now — kept as its own service so a
+  # future microservice (e.g. incident-service, integration-service) can be
+  # added behind the gateway without touching the frontend again.
+  api-gateway:
+    build:
+      context: .
+      dockerfile: backend/api-gateway/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      identity-service:
+        condition: service_healthy
+    environment:
+      PORT: 8000
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+    ports:
+      - "8090:8000"
+
+  # Consumes domain events off RabbitMQ (currently just "user.created") and
+  # sends the corresponding email. Owns no database of its own.
   notification-service:
     build:
       context: .
-      dockerfile: notification-service/Dockerfile
+      dockerfile: backend/services/notification-service/Dockerfile
     restart: unless-stopped
     depends_on:
       rabbitmq:
@@ -92,10 +132,10 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:4000/api}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8090/api}
     restart: unless-stopped
     depends_on:
-      - backend
+      - api-gateway
     ports:
       # Host port 8080 is deliberately avoided — it's a common default for
       # other local dev stacks (e.g. Apache/XAMPP) and collides easily.

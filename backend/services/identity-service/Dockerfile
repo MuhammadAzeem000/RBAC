@@ -6,12 +6,12 @@ FROM node:20-alpine AS build
 RUN apk add --no-cache openssl
 WORKDIR /app
 
-COPY backend/package*.json ./
+COPY backend/services/identity-service/package*.json ./
 RUN npm ci
 
-COPY backend/tsconfig.json backend/prisma.config.ts ./
-COPY backend/prisma ./prisma
-COPY backend/src ./src
+COPY backend/services/identity-service/tsconfig.json backend/services/identity-service/prisma.config.ts ./
+COPY backend/services/identity-service/prisma ./prisma
+COPY backend/services/identity-service/src ./src
 
 # prisma.config.ts loads src/config/env.ts, which strictly validates every
 # runtime env var (JWT secrets, DB credentials) via zod — none of which
@@ -34,7 +34,7 @@ RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY backend/package*.json ./
+COPY backend/services/identity-service/package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
@@ -42,7 +42,7 @@ COPY --from=build /app/dist ./dist
 # loader transpiles it on the fly), so the source tree must ship alongside dist.
 COPY --from=build /app/src ./src
 COPY --from=build /app/prisma ./prisma
-COPY backend/prisma.config.ts ./
+COPY backend/services/identity-service/prisma.config.ts ./
 
 EXPOSE 4000
 
