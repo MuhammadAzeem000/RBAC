@@ -12,6 +12,7 @@ import { FormField } from '@/components/ui/FormField'
 import { IconButton } from '@/components/ui/IconButton'
 import { Select } from '@/components/ui/Select'
 import { Spinner } from '@/components/ui/Spinner'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 
@@ -21,6 +22,8 @@ interface UserRolesPanelProps {
 
 export function UserRolesPanel({ userId }: UserRolesPanelProps) {
   const queryClient = useQueryClient()
+  const { can } = useMyPermissions()
+  const canManage = can('Users', 'Update')
   const [assignOpen, setAssignOpen] = useState(false)
   const [selectedRoleId, setSelectedRoleId] = useState('')
 
@@ -63,10 +66,12 @@ export function UserRolesPanel({ userId }: UserRolesPanelProps) {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm text-slate-500">Roles determine which permissions this user inherits.</p>
-        <Button variant="secondary" onClick={() => setAssignOpen(true)}>
-          <Plus className="size-3.5" aria-hidden="true" />
-          Assign role
-        </Button>
+        {canManage && (
+          <Button variant="secondary" onClick={() => setAssignOpen(true)}>
+            <Plus className="size-3.5" aria-hidden="true" />
+            Assign role
+          </Button>
+        )}
       </div>
 
       {assignedQuery.isLoading ? (
@@ -87,14 +92,16 @@ export function UserRolesPanel({ userId }: UserRolesPanelProps) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge tone="blue">Priority {role.priority}</Badge>
-                <IconButton
-                  label={`Revoke ${role.name}`}
-                  variant="danger"
-                  onClick={() => revokeMutation.mutate(role.id)}
-                  disabled={revokeMutation.isPending}
-                >
-                  <Trash2 className="size-3.5" aria-hidden="true" />
-                </IconButton>
+                {canManage && (
+                  <IconButton
+                    label={`Revoke ${role.name}`}
+                    variant="danger"
+                    onClick={() => revokeMutation.mutate(role.id)}
+                    disabled={revokeMutation.isPending}
+                  >
+                    <Trash2 className="size-3.5" aria-hidden="true" />
+                  </IconButton>
+                )}
               </div>
             </li>
           ))}

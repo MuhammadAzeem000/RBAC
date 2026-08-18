@@ -1,25 +1,26 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../config/prisma";
+import { ACTION_NAMES, MODULE_NAMES } from "../constants/rbac";
 import { UserResponse } from "../interfaces/user";
 
 const SALT_ROUNDS = 10;
 
 const MODULES = [
-  { name: "Dashboard", sortOrder: 0 },
-  { name: "Users", sortOrder: 1 },
-  { name: "Departments", sortOrder: 2 },
-  { name: "Roles", sortOrder: 3 },
-  { name: "Modules", sortOrder: 4 },
-  { name: "Actions", sortOrder: 5 },
-  { name: "Permissions", sortOrder: 6 },
-  { name: "Audit Logs", sortOrder: 7 },
+  { name: MODULE_NAMES.DASHBOARD, sortOrder: 0 },
+  { name: MODULE_NAMES.USERS, sortOrder: 1 },
+  { name: MODULE_NAMES.DEPARTMENTS, sortOrder: 2 },
+  { name: MODULE_NAMES.ROLES, sortOrder: 3 },
+  { name: MODULE_NAMES.MODULES, sortOrder: 4 },
+  { name: MODULE_NAMES.ACTIONS, sortOrder: 5 },
+  { name: MODULE_NAMES.PERMISSIONS, sortOrder: 6 },
+  { name: MODULE_NAMES.AUDIT_LOGS, sortOrder: 7 },
 ] as const;
 
 const ACTIONS = [
-  { name: "View", sortOrder: 0 },
-  { name: "Create", sortOrder: 1 },
-  { name: "Update", sortOrder: 2 },
-  { name: "Delete", sortOrder: 3 },
+  { name: ACTION_NAMES.VIEW, sortOrder: 0 },
+  { name: ACTION_NAMES.CREATE, sortOrder: 1 },
+  { name: ACTION_NAMES.UPDATE, sortOrder: 2 },
+  { name: ACTION_NAMES.DELETE, sortOrder: 3 },
 ] as const;
 
 export interface BootstrapFirstAdminInput {

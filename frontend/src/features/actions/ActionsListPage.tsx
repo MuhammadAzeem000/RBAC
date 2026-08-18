@@ -13,6 +13,7 @@ import { Drawer } from '@/components/ui/Drawer'
 import { IconButton } from '@/components/ui/IconButton'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useListState } from '@/hooks/useListState'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 import type { Action } from '@/types/action'
@@ -24,6 +25,7 @@ const columnHelper = createColumnHelper<Action>()
 export function ActionsListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { can } = useMyPermissions()
   const { page, pageSize, search, isActive, setPage, setPageSize, setSearch, setIsActive } = useListState()
 
   const [drawerAction, setDrawerAction] = useState<Action | 'new' | null>(null)
@@ -90,26 +92,30 @@ export function ActionsListPage() {
       header: '',
       cell: (info) => (
         <div className="flex justify-end gap-1">
-          <IconButton
-            label="Edit action"
-            onClick={(e) => {
-              e.stopPropagation()
-              setDrawerAction(info.row.original)
-            }}
-          >
-            <Pencil className="size-3.5" aria-hidden="true" />
-          </IconButton>
-          <IconButton
-            label="Delete action"
-            variant="danger"
-            disabled={info.row.original.isSystem}
-            onClick={(e) => {
-              e.stopPropagation()
-              setDeleteTarget(info.row.original)
-            }}
-          >
-            <Trash2 className="size-3.5" aria-hidden="true" />
-          </IconButton>
+          {can('Actions', 'Update') && (
+            <IconButton
+              label="Edit action"
+              onClick={(e) => {
+                e.stopPropagation()
+                setDrawerAction(info.row.original)
+              }}
+            >
+              <Pencil className="size-3.5" aria-hidden="true" />
+            </IconButton>
+          )}
+          {can('Actions', 'Delete') && (
+            <IconButton
+              label="Delete action"
+              variant="danger"
+              disabled={info.row.original.isSystem}
+              onClick={(e) => {
+                e.stopPropagation()
+                setDeleteTarget(info.row.original)
+              }}
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+            </IconButton>
+          )}
         </div>
       ),
     }),
@@ -124,10 +130,12 @@ export function ActionsListPage() {
         title="Actions"
         description="Operations that can be performed within a module."
         actions={
-          <Button variant="primary" onClick={() => setDrawerAction('new')}>
-            <Plus className="size-3.5" aria-hidden="true" />
-            New action
-          </Button>
+          can('Actions', 'Create') && (
+            <Button variant="primary" onClick={() => setDrawerAction('new')}>
+              <Plus className="size-3.5" aria-hidden="true" />
+              New action
+            </Button>
+          )
         }
       />
 

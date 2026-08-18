@@ -11,6 +11,7 @@ import { FormField } from '@/components/ui/FormField'
 import { IconButton } from '@/components/ui/IconButton'
 import { Select } from '@/components/ui/Select'
 import { Spinner } from '@/components/ui/Spinner'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 
@@ -20,6 +21,8 @@ interface RolePermissionsPanelProps {
 
 export function RolePermissionsPanel({ roleId }: RolePermissionsPanelProps) {
   const queryClient = useQueryClient()
+  const { can } = useMyPermissions()
+  const canManage = can('Roles', 'Update')
   const [assignOpen, setAssignOpen] = useState(false)
   const [selectedPermissionId, setSelectedPermissionId] = useState('')
 
@@ -64,10 +67,12 @@ export function RolePermissionsPanel({ roleId }: RolePermissionsPanelProps) {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm text-slate-500">Permissions granted to users with this role.</p>
-        <Button variant="secondary" onClick={() => setAssignOpen(true)}>
-          <Plus className="size-3.5" aria-hidden="true" />
-          Assign permission
-        </Button>
+        {canManage && (
+          <Button variant="secondary" onClick={() => setAssignOpen(true)}>
+            <Plus className="size-3.5" aria-hidden="true" />
+            Assign permission
+          </Button>
+        )}
       </div>
 
       {assignedQuery.isLoading ? (
@@ -86,14 +91,16 @@ export function RolePermissionsPanel({ roleId }: RolePermissionsPanelProps) {
                 <p className="text-sm font-medium text-slate-800">{permission.name}</p>
                 <p className="font-mono text-xs text-slate-400">{permission.code}</p>
               </div>
-              <IconButton
-                label={`Revoke ${permission.name}`}
-                variant="danger"
-                onClick={() => revokeMutation.mutate(permission.id)}
-                disabled={revokeMutation.isPending}
-              >
-                <Trash2 className="size-3.5" aria-hidden="true" />
-              </IconButton>
+              {canManage && (
+                <IconButton
+                  label={`Revoke ${permission.name}`}
+                  variant="danger"
+                  onClick={() => revokeMutation.mutate(permission.id)}
+                  disabled={revokeMutation.isPending}
+                >
+                  <Trash2 className="size-3.5" aria-hidden="true" />
+                </IconButton>
+              )}
             </li>
           ))}
         </ul>

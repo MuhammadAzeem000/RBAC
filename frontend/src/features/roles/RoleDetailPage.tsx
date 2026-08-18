@@ -13,6 +13,7 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import { Spinner } from '@/components/ui/Spinner'
 import { Tabs } from '@/components/ui/Tabs'
 import { useMyRoleIds } from '@/hooks/useCurrentUserAssignments'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 import { RoleForm, RoleFormFooter } from './RoleForm'
@@ -29,6 +30,7 @@ export function RoleDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const myRoleIds = useMyRoleIds()
+  const { can } = useMyPermissions()
   const [tab, setTab] = useState('overview')
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -115,41 +117,46 @@ export function RoleDetailPage() {
           {role.code && <p className="mt-0.5 text-sm text-slate-500">{role.code}</p>}
         </div>
         <div className="flex shrink-0 gap-2">
-          {role.isActive ? (
-            <Button
-              variant="secondary"
-              disabled={disableActiveToggle}
-              title={activeToggleTitle}
-              onClick={() => setDeactivating(true)}
-            >
-              <PowerOff className="size-3.5" aria-hidden="true" />
-              Deactivate
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              disabled={disableActiveToggle}
-              title={activeToggleTitle}
-              onClick={() => setActiveMutation.mutate(true)}
-              loading={setActiveMutation.isPending}
-            >
-              <Power className="size-3.5" aria-hidden="true" />
-              Activate
+          {can('Roles', 'Update') &&
+            (role.isActive ? (
+              <Button
+                variant="secondary"
+                disabled={disableActiveToggle}
+                title={activeToggleTitle}
+                onClick={() => setDeactivating(true)}
+              >
+                <PowerOff className="size-3.5" aria-hidden="true" />
+                Deactivate
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={disableActiveToggle}
+                title={activeToggleTitle}
+                onClick={() => setActiveMutation.mutate(true)}
+                loading={setActiveMutation.isPending}
+              >
+                <Power className="size-3.5" aria-hidden="true" />
+                Activate
+              </Button>
+            ))}
+          {can('Roles', 'Update') && (
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit
             </Button>
           )}
-          <Button variant="secondary" onClick={() => setEditing(true)}>
-            <Pencil className="size-3.5" aria-hidden="true" />
-            Edit
-          </Button>
-          <Button
-            variant="danger-ghost"
-            disabled={disableDelete}
-            title={deleteTitle}
-            onClick={() => setDeleting(true)}
-          >
-            <Trash2 className="size-3.5" aria-hidden="true" />
-            Delete
-          </Button>
+          {can('Roles', 'Delete') && (
+            <Button
+              variant="danger-ghost"
+              disabled={disableDelete}
+              title={deleteTitle}
+              onClick={() => setDeleting(true)}
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 

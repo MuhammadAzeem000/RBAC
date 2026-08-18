@@ -65,10 +65,11 @@ export async function me(req: Request, res: Response) {
   res.json(user);
 }
 
-// Names of the modules the caller's roles grant any permission on — no
-// special permission needed beyond being signed in, since this is just
-// "what can I see", used to drive nav/menu visibility on the frontend.
+// The modules the caller's roles grant any permission on, plus which actions
+// on each — no special permission needed beyond being signed in, since this
+// is just "what can I see and do", used to drive nav visibility and
+// per-action (create/edit/delete) control gating on the frontend.
 export async function myModules(req: Request, res: Response) {
-  const names = await authzService.getMyModuleNames(req.auth!.userId);
-  res.json({ data: names.map((name) => ({ name, isEnabled: true })) });
+  const permissions = await authzService.getMyPermissions(req.auth!.userId);
+  res.json({ data: permissions.map((p) => ({ name: p.name, isEnabled: true, actions: p.actions })) });
 }

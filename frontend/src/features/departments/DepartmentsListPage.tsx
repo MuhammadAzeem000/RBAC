@@ -14,6 +14,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useMyDepartmentIds } from '@/hooks/useCurrentUserAssignments'
 import { useListState } from '@/hooks/useListState'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 import type { Department } from '@/types/department'
@@ -26,6 +27,7 @@ export function DepartmentsListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const myDepartmentIds = useMyDepartmentIds()
+  const { can } = useMyPermissions()
   const { page, pageSize, search, isActive, setPage, setPageSize, setSearch, setIsActive } = useListState()
 
   const [drawerDepartment, setDrawerDepartment] = useState<Department | 'new' | null>(null)
@@ -101,52 +103,59 @@ export function DepartmentsListPage() {
       cell: (info) => {
         const department = info.row.original
         const isMine = myDepartmentIds.has(department.id)
+        const canUpdate = can('Departments', 'Update')
+        const canDelete = can('Departments', 'Delete')
         return (
           <div className="flex justify-end gap-1">
-            {department.isActive ? (
+            {canUpdate &&
+              (department.isActive ? (
+                <IconButton
+                  label={isMine ? "You can't change the active status of a department you belong to" : 'Deactivate department'}
+                  variant="danger"
+                  disabled={isMine}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeactivateTarget(department)
+                  }}
+                >
+                  <PowerOff className="size-3.5" aria-hidden="true" />
+                </IconButton>
+              ) : (
+                <IconButton
+                  label={isMine ? "You can't change the active status of a department you belong to" : 'Activate department'}
+                  disabled={isMine || setActiveMutation.isPending}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setActiveMutation.mutate({ id: department.id, isActive: true })
+                  }}
+                >
+                  <Power className="size-3.5" aria-hidden="true" />
+                </IconButton>
+              ))}
+            {canUpdate && (
               <IconButton
-                label={isMine ? "You can't change the active status of a department you belong to" : 'Deactivate department'}
+                label="Edit department"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDrawerDepartment(department)
+                }}
+              >
+                <Pencil className="size-3.5" aria-hidden="true" />
+              </IconButton>
+            )}
+            {canDelete && (
+              <IconButton
+                label={isMine ? "You can't delete a department you belong to" : 'Delete department'}
                 variant="danger"
                 disabled={isMine}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setDeactivateTarget(department)
+                  setDeleteTarget(department)
                 }}
               >
-                <PowerOff className="size-3.5" aria-hidden="true" />
-              </IconButton>
-            ) : (
-              <IconButton
-                label={isMine ? "You can't change the active status of a department you belong to" : 'Activate department'}
-                disabled={isMine || setActiveMutation.isPending}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setActiveMutation.mutate({ id: department.id, isActive: true })
-                }}
-              >
-                <Power className="size-3.5" aria-hidden="true" />
+                <Trash2 className="size-3.5" aria-hidden="true" />
               </IconButton>
             )}
-            <IconButton
-              label="Edit department"
-              onClick={(e) => {
-                e.stopPropagation()
-                setDrawerDepartment(department)
-              }}
-            >
-              <Pencil className="size-3.5" aria-hidden="true" />
-            </IconButton>
-            <IconButton
-              label={isMine ? "You can't delete a department you belong to" : 'Delete department'}
-              variant="danger"
-              disabled={isMine}
-              onClick={(e) => {
-                e.stopPropagation()
-                setDeleteTarget(department)
-              }}
-            >
-              <Trash2 className="size-3.5" aria-hidden="true" />
-            </IconButton>
           </div>
         )
       },
@@ -162,10 +171,12 @@ export function DepartmentsListPage() {
         title="Departments"
         description="Organizational units within your company."
         actions={
-          <Button variant="primary" onClick={() => setDrawerDepartment('new')}>
-            <Plus className="size-3.5" aria-hidden="true" />
-            New department
-          </Button>
+          can('Departments', 'Create') && (
+            <Button variant="primary" onClick={() => setDrawerDepartment('new')}>
+              <Plus className="size-3.5" aria-hidden="true" />
+              New department
+            </Button>
+          )
         }
       />
 

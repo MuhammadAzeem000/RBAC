@@ -9,6 +9,7 @@ import { usersApi } from '@/api/users.api'
 import { Card, CardBody } from '@/components/ui/Card'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Spinner } from '@/components/ui/Spinner'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { useAuthStore } from '@/stores/authStore'
 
 interface SummaryCardProps {
@@ -43,22 +44,31 @@ function SummaryCard({ label, to, icon: Icon, isLoading, value }: SummaryCardPro
 
 export function DashboardPage() {
   const user = useAuthStore((state) => state.user)
+  const { can } = useMyPermissions()
+  const canViewUsers = can('Users', 'View')
+  const canViewDepartments = can('Departments', 'View')
+  const canViewRoles = can('Roles', 'View')
+  const canViewPermissions = can('Permissions', 'View')
 
   const usersQuery = useQuery({
     queryKey: ['users', 'count'],
     queryFn: () => usersApi.list({ page: 1, pageSize: 1 }),
+    enabled: canViewUsers,
   })
   const departmentsQuery = useQuery({
     queryKey: ['departments', 'count'],
     queryFn: () => departmentsApi.list({ page: 1, pageSize: 1 }),
+    enabled: canViewDepartments,
   })
   const rolesQuery = useQuery({
     queryKey: ['roles', 'count'],
     queryFn: () => rolesApi.list({ page: 1, pageSize: 1 }),
+    enabled: canViewRoles,
   })
   const permissionsQuery = useQuery({
     queryKey: ['permissions', 'count'],
     queryFn: () => permissionsApi.list({ page: 1, pageSize: 1 }),
+    enabled: canViewPermissions,
   })
 
   return (
@@ -66,34 +76,42 @@ export function DashboardPage() {
       <PageHeader title={`Welcome back${user?.name ? `, ${user.name.split(' ')[0]}` : ''}`} description="An overview of your organization." />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <SummaryCard
-          label="Users"
-          to="/users"
-          icon={Users}
-          isLoading={usersQuery.isLoading}
-          value={usersQuery.data?.pagination.total}
-        />
-        <SummaryCard
-          label="Departments"
-          to="/departments"
-          icon={Network}
-          isLoading={departmentsQuery.isLoading}
-          value={departmentsQuery.data?.pagination.total}
-        />
-        <SummaryCard
-          label="Roles"
-          to="/roles"
-          icon={ShieldCheck}
-          isLoading={rolesQuery.isLoading}
-          value={rolesQuery.data?.pagination.total}
-        />
-        <SummaryCard
-          label="Permissions"
-          to="/permissions"
-          icon={KeyRound}
-          isLoading={permissionsQuery.isLoading}
-          value={permissionsQuery.data?.pagination.total}
-        />
+        {canViewUsers && (
+          <SummaryCard
+            label="Users"
+            to="/users"
+            icon={Users}
+            isLoading={usersQuery.isLoading}
+            value={usersQuery.data?.pagination.total}
+          />
+        )}
+        {canViewDepartments && (
+          <SummaryCard
+            label="Departments"
+            to="/departments"
+            icon={Network}
+            isLoading={departmentsQuery.isLoading}
+            value={departmentsQuery.data?.pagination.total}
+          />
+        )}
+        {canViewRoles && (
+          <SummaryCard
+            label="Roles"
+            to="/roles"
+            icon={ShieldCheck}
+            isLoading={rolesQuery.isLoading}
+            value={rolesQuery.data?.pagination.total}
+          />
+        )}
+        {canViewPermissions && (
+          <SummaryCard
+            label="Permissions"
+            to="/permissions"
+            icon={KeyRound}
+            isLoading={permissionsQuery.isLoading}
+            value={permissionsQuery.data?.pagination.total}
+          />
+        )}
       </div>
     </div>
   )

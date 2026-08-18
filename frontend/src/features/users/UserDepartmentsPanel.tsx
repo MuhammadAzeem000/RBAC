@@ -13,6 +13,7 @@ import { FormField } from '@/components/ui/FormField'
 import { IconButton } from '@/components/ui/IconButton'
 import { Select } from '@/components/ui/Select'
 import { Spinner } from '@/components/ui/Spinner'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 
@@ -22,6 +23,8 @@ interface UserDepartmentsPanelProps {
 
 export function UserDepartmentsPanel({ userId }: UserDepartmentsPanelProps) {
   const queryClient = useQueryClient()
+  const { can } = useMyPermissions()
+  const canManage = can('Users', 'Update')
   const [assignOpen, setAssignOpen] = useState(false)
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('')
   const [isPrimary, setIsPrimary] = useState(false)
@@ -68,10 +71,12 @@ export function UserDepartmentsPanel({ userId }: UserDepartmentsPanelProps) {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm text-slate-500">Departments this user belongs to.</p>
-        <Button variant="secondary" onClick={() => setAssignOpen(true)}>
-          <Plus className="size-3.5" aria-hidden="true" />
-          Assign department
-        </Button>
+        {canManage && (
+          <Button variant="secondary" onClick={() => setAssignOpen(true)}>
+            <Plus className="size-3.5" aria-hidden="true" />
+            Assign department
+          </Button>
+        )}
       </div>
 
       {assignedQuery.isLoading ? (
@@ -92,14 +97,16 @@ export function UserDepartmentsPanel({ userId }: UserDepartmentsPanelProps) {
               </div>
               <div className="flex items-center gap-2">
                 {department.isPrimary && <Badge tone="blue">Primary</Badge>}
-                <IconButton
-                  label={`Remove ${department.name}`}
-                  variant="danger"
-                  onClick={() => revokeMutation.mutate(department.id)}
-                  disabled={revokeMutation.isPending}
-                >
-                  <Trash2 className="size-3.5" aria-hidden="true" />
-                </IconButton>
+                {canManage && (
+                  <IconButton
+                    label={`Remove ${department.name}`}
+                    variant="danger"
+                    onClick={() => revokeMutation.mutate(department.id)}
+                    disabled={revokeMutation.isPending}
+                  >
+                    <Trash2 className="size-3.5" aria-hidden="true" />
+                  </IconButton>
+                )}
               </div>
             </li>
           ))}

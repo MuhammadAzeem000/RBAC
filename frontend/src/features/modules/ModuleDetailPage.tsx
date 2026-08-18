@@ -11,6 +11,7 @@ import { DescriptionList } from '@/components/ui/DescriptionList'
 import { Drawer } from '@/components/ui/Drawer'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Spinner } from '@/components/ui/Spinner'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 import { ModuleForm, ModuleFormFooter } from './ModuleForm'
@@ -20,6 +21,7 @@ export function ModuleDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { can } = useMyPermissions()
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deactivating, setDeactivating] = useState(false)
@@ -90,36 +92,46 @@ export function ModuleDetailPage() {
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
-          {appModule.isActive ? (
-            <Button
-              variant="secondary"
-              disabled={appModule.isSystem}
-              title={appModule.isSystem ? "System modules can't be deactivated" : undefined}
-              onClick={() => setDeactivating(true)}
-            >
-              <PowerOff className="size-3.5" aria-hidden="true" />
-              Deactivate
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              disabled={appModule.isSystem}
-              title={appModule.isSystem ? "System modules can't be deactivated" : undefined}
-              onClick={() => setActiveMutation.mutate(true)}
-              loading={setActiveMutation.isPending}
-            >
-              <Power className="size-3.5" aria-hidden="true" />
-              Activate
+          {can('Modules', 'Update') &&
+            (appModule.isActive ? (
+              <Button
+                variant="secondary"
+                disabled={appModule.isSystem}
+                title={appModule.isSystem ? "System modules can't be deactivated" : undefined}
+                onClick={() => setDeactivating(true)}
+              >
+                <PowerOff className="size-3.5" aria-hidden="true" />
+                Deactivate
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={appModule.isSystem}
+                title={appModule.isSystem ? "System modules can't be deactivated" : undefined}
+                onClick={() => setActiveMutation.mutate(true)}
+                loading={setActiveMutation.isPending}
+              >
+                <Power className="size-3.5" aria-hidden="true" />
+                Activate
+              </Button>
+            ))}
+          {can('Modules', 'Update') && (
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit
             </Button>
           )}
-          <Button variant="secondary" onClick={() => setEditing(true)}>
-            <Pencil className="size-3.5" aria-hidden="true" />
-            Edit
-          </Button>
-          <Button variant="danger-ghost" disabled={appModule.isSystem} onClick={() => setDeleting(true)}>
-            <Trash2 className="size-3.5" aria-hidden="true" />
-            Delete
-          </Button>
+          {can('Modules', 'Delete') && (
+            <Button
+              variant="danger-ghost"
+              disabled={appModule.isSystem}
+              title={appModule.isSystem ? "System modules can't be deleted" : undefined}
+              onClick={() => setDeleting(true)}
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 

@@ -13,6 +13,7 @@ import { Drawer } from '@/components/ui/Drawer'
 import { IconButton } from '@/components/ui/IconButton'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useListState } from '@/hooks/useListState'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 import type { AppModule } from '@/types/module'
@@ -24,6 +25,7 @@ const columnHelper = createColumnHelper<AppModule>()
 export function ModulesListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { can } = useMyPermissions()
   const { page, pageSize, search, isActive, setPage, setPageSize, setSearch, setIsActive } = useListState()
 
   const [drawerModule, setDrawerModule] = useState<AppModule | 'new' | null>(null)
@@ -98,6 +100,8 @@ export function ModulesListPage() {
       header: '',
       cell: (info) => {
         const appModule = info.row.original
+        const canUpdate = can('Modules', 'Update')
+        const canDelete = can('Modules', 'Delete')
         const activeToggleLabel = appModule.isSystem
           ? "System modules can't be deactivated"
           : appModule.isActive
@@ -105,50 +109,55 @@ export function ModulesListPage() {
             : 'Activate module'
         return (
           <div className="flex justify-end gap-1">
-            {appModule.isActive ? (
+            {canUpdate &&
+              (appModule.isActive ? (
+                <IconButton
+                  label={activeToggleLabel}
+                  variant="danger"
+                  disabled={appModule.isSystem}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeactivateTarget(appModule)
+                  }}
+                >
+                  <PowerOff className="size-3.5" aria-hidden="true" />
+                </IconButton>
+              ) : (
+                <IconButton
+                  label={activeToggleLabel}
+                  disabled={appModule.isSystem || setActiveMutation.isPending}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setActiveMutation.mutate({ id: appModule.id, isActive: true })
+                  }}
+                >
+                  <Power className="size-3.5" aria-hidden="true" />
+                </IconButton>
+              ))}
+            {canUpdate && (
               <IconButton
-                label={activeToggleLabel}
+                label="Edit module"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDrawerModule(appModule)
+                }}
+              >
+                <Pencil className="size-3.5" aria-hidden="true" />
+              </IconButton>
+            )}
+            {canDelete && (
+              <IconButton
+                label="Delete module"
                 variant="danger"
                 disabled={appModule.isSystem}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setDeactivateTarget(appModule)
+                  setDeleteTarget(appModule)
                 }}
               >
-                <PowerOff className="size-3.5" aria-hidden="true" />
-              </IconButton>
-            ) : (
-              <IconButton
-                label={activeToggleLabel}
-                disabled={appModule.isSystem || setActiveMutation.isPending}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setActiveMutation.mutate({ id: appModule.id, isActive: true })
-                }}
-              >
-                <Power className="size-3.5" aria-hidden="true" />
+                <Trash2 className="size-3.5" aria-hidden="true" />
               </IconButton>
             )}
-            <IconButton
-              label="Edit module"
-              onClick={(e) => {
-                e.stopPropagation()
-                setDrawerModule(appModule)
-              }}
-            >
-              <Pencil className="size-3.5" aria-hidden="true" />
-            </IconButton>
-            <IconButton
-              label="Delete module"
-              variant="danger"
-              disabled={appModule.isSystem}
-              onClick={(e) => {
-                e.stopPropagation()
-                setDeleteTarget(appModule)
-              }}
-            >
-              <Trash2 className="size-3.5" aria-hidden="true" />
-            </IconButton>
           </div>
         )
       },
@@ -164,10 +173,12 @@ export function ModulesListPage() {
         title="Modules"
         description="Feature areas that permissions can be scoped to."
         actions={
-          <Button variant="primary" onClick={() => setDrawerModule('new')}>
-            <Plus className="size-3.5" aria-hidden="true" />
-            New module
-          </Button>
+          can('Modules', 'Create') && (
+            <Button variant="primary" onClick={() => setDrawerModule('new')}>
+              <Plus className="size-3.5" aria-hidden="true" />
+              New module
+            </Button>
+          )
         }
       />
 

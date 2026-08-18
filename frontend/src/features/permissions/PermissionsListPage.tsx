@@ -16,6 +16,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Select } from '@/components/ui/Select'
 import { useListState } from '@/hooks/useListState'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 import type { Permission } from '@/types/permission'
@@ -27,6 +28,7 @@ const columnHelper = createColumnHelper<Permission>()
 export function PermissionsListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { can } = useMyPermissions()
   const { page, pageSize, search, isActive, setPage, setPageSize, setSearch, setIsActive } = useListState()
   const [moduleFilter, setModuleFilter] = useState('')
 
@@ -124,26 +126,30 @@ export function PermissionsListPage() {
       header: '',
       cell: (info) => (
         <div className="flex justify-end gap-1">
-          <IconButton
-            label="Edit permission"
-            onClick={(e) => {
-              e.stopPropagation()
-              setDrawerPermission(info.row.original)
-            }}
-          >
-            <Pencil className="size-3.5" aria-hidden="true" />
-          </IconButton>
-          <IconButton
-            label="Delete permission"
-            variant="danger"
-            disabled={info.row.original.isSystem}
-            onClick={(e) => {
-              e.stopPropagation()
-              setDeleteTarget(info.row.original)
-            }}
-          >
-            <Trash2 className="size-3.5" aria-hidden="true" />
-          </IconButton>
+          {can('Permissions', 'Update') && (
+            <IconButton
+              label="Edit permission"
+              onClick={(e) => {
+                e.stopPropagation()
+                setDrawerPermission(info.row.original)
+              }}
+            >
+              <Pencil className="size-3.5" aria-hidden="true" />
+            </IconButton>
+          )}
+          {can('Permissions', 'Delete') && (
+            <IconButton
+              label="Delete permission"
+              variant="danger"
+              disabled={info.row.original.isSystem}
+              onClick={(e) => {
+                e.stopPropagation()
+                setDeleteTarget(info.row.original)
+              }}
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+            </IconButton>
+          )}
         </div>
       ),
     }),
@@ -158,10 +164,12 @@ export function PermissionsListPage() {
         title="Permissions"
         description="Fine-grained access grants, scoped to a module and action."
         actions={
-          <Button variant="primary" onClick={() => setDrawerPermission('new')}>
-            <Plus className="size-3.5" aria-hidden="true" />
-            New permission
-          </Button>
+          can('Permissions', 'Create') && (
+            <Button variant="primary" onClick={() => setDrawerPermission('new')}>
+              <Plus className="size-3.5" aria-hidden="true" />
+              New permission
+            </Button>
+          )
         }
       />
 

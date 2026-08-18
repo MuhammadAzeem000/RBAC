@@ -13,6 +13,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/Badge'
 import { useListState } from '@/hooks/useListState'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from '@/stores/toastStore'
@@ -26,6 +27,7 @@ export function UsersListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const currentUserId = useAuthStore((state) => state.user?.id)
+  const { can } = useMyPermissions()
   const { page, pageSize, search, isActive, setPage, setPageSize, setSearch, setIsActive } = useListState()
 
   const [drawerUser, setDrawerUser] = useState<User | 'new' | null>(null)
@@ -104,52 +106,59 @@ export function UsersListPage() {
       cell: (info) => {
         const user = info.row.original
         const isSelf = user.id === currentUserId
+        const canUpdate = can('Users', 'Update')
+        const canDelete = can('Users', 'Delete')
         return (
           <div className="flex justify-end gap-1">
-            {user.isActive ? (
+            {canUpdate &&
+              (user.isActive ? (
+                <IconButton
+                  label={isSelf ? "You can't deactivate your own account" : 'Deactivate user'}
+                  variant="danger"
+                  disabled={isSelf}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeactivateTarget(user)
+                  }}
+                >
+                  <UserX className="size-3.5" aria-hidden="true" />
+                </IconButton>
+              ) : (
+                <IconButton
+                  label={isSelf ? "You can't activate your own account" : 'Activate user'}
+                  disabled={isSelf || setActiveMutation.isPending}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setActiveMutation.mutate({ id: user.id, isActive: true })
+                  }}
+                >
+                  <UserCheck className="size-3.5" aria-hidden="true" />
+                </IconButton>
+              ))}
+            {canUpdate && (
               <IconButton
-                label={isSelf ? "You can't deactivate your own account" : 'Deactivate user'}
+                label="Edit user"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDrawerUser(user)
+                }}
+              >
+                <Pencil className="size-3.5" aria-hidden="true" />
+              </IconButton>
+            )}
+            {canDelete && (
+              <IconButton
+                label={isSelf ? "You can't delete your own account" : 'Delete user'}
                 variant="danger"
                 disabled={isSelf}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setDeactivateTarget(user)
+                  setDeleteTarget(user)
                 }}
               >
-                <UserX className="size-3.5" aria-hidden="true" />
-              </IconButton>
-            ) : (
-              <IconButton
-                label={isSelf ? "You can't activate your own account" : 'Activate user'}
-                disabled={isSelf || setActiveMutation.isPending}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setActiveMutation.mutate({ id: user.id, isActive: true })
-                }}
-              >
-                <UserCheck className="size-3.5" aria-hidden="true" />
+                <Trash2 className="size-3.5" aria-hidden="true" />
               </IconButton>
             )}
-            <IconButton
-              label="Edit user"
-              onClick={(e) => {
-                e.stopPropagation()
-                setDrawerUser(user)
-              }}
-            >
-              <Pencil className="size-3.5" aria-hidden="true" />
-            </IconButton>
-            <IconButton
-              label={isSelf ? "You can't delete your own account" : 'Delete user'}
-              variant="danger"
-              disabled={isSelf}
-              onClick={(e) => {
-                e.stopPropagation()
-                setDeleteTarget(user)
-              }}
-            >
-              <Trash2 className="size-3.5" aria-hidden="true" />
-            </IconButton>
           </div>
         )
       },
@@ -165,10 +174,12 @@ export function UsersListPage() {
         title="Users"
         description="People with access to your organization."
         actions={
-          <Button variant="primary" onClick={() => setDrawerUser('new')}>
-            <Plus className="size-3.5" aria-hidden="true" />
-            New user
-          </Button>
+          can('Users', 'Create') && (
+            <Button variant="primary" onClick={() => setDrawerUser('new')}>
+              <Plus className="size-3.5" aria-hidden="true" />
+              New user
+            </Button>
+          )
         }
       />
 

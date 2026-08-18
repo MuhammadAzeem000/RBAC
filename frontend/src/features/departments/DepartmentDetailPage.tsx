@@ -12,6 +12,7 @@ import { Drawer } from '@/components/ui/Drawer'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Spinner } from '@/components/ui/Spinner'
 import { useMyDepartmentIds } from '@/hooks/useCurrentUserAssignments'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 import { DepartmentForm, DepartmentFormFooter } from './DepartmentForm'
@@ -22,6 +23,7 @@ export function DepartmentDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const myDepartmentIds = useMyDepartmentIds()
+  const { can } = useMyPermissions()
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deactivating, setDeactivating] = useState(false)
@@ -96,41 +98,46 @@ export function DepartmentDetailPage() {
           {department.code && <p className="mt-0.5 text-sm text-slate-500">{department.code}</p>}
         </div>
         <div className="flex shrink-0 gap-2">
-          {department.isActive ? (
-            <Button
-              variant="secondary"
-              disabled={isMine}
-              title={isMine ? "You can't change the active status of a department you belong to" : undefined}
-              onClick={() => setDeactivating(true)}
-            >
-              <PowerOff className="size-3.5" aria-hidden="true" />
-              Deactivate
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              disabled={isMine}
-              title={isMine ? "You can't change the active status of a department you belong to" : undefined}
-              onClick={() => setActiveMutation.mutate(true)}
-              loading={setActiveMutation.isPending}
-            >
-              <Power className="size-3.5" aria-hidden="true" />
-              Activate
+          {can('Departments', 'Update') &&
+            (department.isActive ? (
+              <Button
+                variant="secondary"
+                disabled={isMine}
+                title={isMine ? "You can't change the active status of a department you belong to" : undefined}
+                onClick={() => setDeactivating(true)}
+              >
+                <PowerOff className="size-3.5" aria-hidden="true" />
+                Deactivate
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={isMine}
+                title={isMine ? "You can't change the active status of a department you belong to" : undefined}
+                onClick={() => setActiveMutation.mutate(true)}
+                loading={setActiveMutation.isPending}
+              >
+                <Power className="size-3.5" aria-hidden="true" />
+                Activate
+              </Button>
+            ))}
+          {can('Departments', 'Update') && (
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit
             </Button>
           )}
-          <Button variant="secondary" onClick={() => setEditing(true)}>
-            <Pencil className="size-3.5" aria-hidden="true" />
-            Edit
-          </Button>
-          <Button
-            variant="danger-ghost"
-            disabled={isMine}
-            title={isMine ? "You can't delete a department you belong to" : undefined}
-            onClick={() => setDeleting(true)}
-          >
-            <Trash2 className="size-3.5" aria-hidden="true" />
-            Delete
-          </Button>
+          {can('Departments', 'Delete') && (
+            <Button
+              variant="danger-ghost"
+              disabled={isMine}
+              title={isMine ? "You can't delete a department you belong to" : undefined}
+              onClick={() => setDeleting(true)}
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 

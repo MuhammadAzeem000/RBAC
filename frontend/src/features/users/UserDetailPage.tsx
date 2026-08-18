@@ -12,6 +12,7 @@ import { Drawer } from '@/components/ui/Drawer'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Spinner } from '@/components/ui/Spinner'
 import { Tabs } from '@/components/ui/Tabs'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from '@/stores/toastStore'
@@ -31,6 +32,7 @@ export function UserDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const currentUserId = useAuthStore((state) => state.user?.id)
+  const { can } = useMyPermissions()
   const [tab, setTab] = useState('overview')
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -108,41 +110,46 @@ export function UserDetailPage() {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
-          {user.isActive ? (
-            <Button
-              variant="secondary"
-              disabled={isSelf}
-              title={isSelf ? "You can't deactivate your own account" : undefined}
-              onClick={() => setDeactivating(true)}
-            >
-              <UserX className="size-3.5" aria-hidden="true" />
-              Deactivate
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              disabled={isSelf}
-              title={isSelf ? "You can't activate your own account" : undefined}
-              onClick={() => setActiveMutation.mutate(true)}
-              loading={setActiveMutation.isPending}
-            >
-              <UserCheck className="size-3.5" aria-hidden="true" />
-              Activate
+          {can('Users', 'Update') &&
+            (user.isActive ? (
+              <Button
+                variant="secondary"
+                disabled={isSelf}
+                title={isSelf ? "You can't deactivate your own account" : undefined}
+                onClick={() => setDeactivating(true)}
+              >
+                <UserX className="size-3.5" aria-hidden="true" />
+                Deactivate
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={isSelf}
+                title={isSelf ? "You can't activate your own account" : undefined}
+                onClick={() => setActiveMutation.mutate(true)}
+                loading={setActiveMutation.isPending}
+              >
+                <UserCheck className="size-3.5" aria-hidden="true" />
+                Activate
+              </Button>
+            ))}
+          {can('Users', 'Update') && (
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit
             </Button>
           )}
-          <Button variant="secondary" onClick={() => setEditing(true)}>
-            <Pencil className="size-3.5" aria-hidden="true" />
-            Edit
-          </Button>
-          <Button
-            variant="danger-ghost"
-            disabled={isSelf}
-            title={isSelf ? "You can't delete your own account" : undefined}
-            onClick={() => setDeleting(true)}
-          >
-            <Trash2 className="size-3.5" aria-hidden="true" />
-            Delete
-          </Button>
+          {can('Users', 'Delete') && (
+            <Button
+              variant="danger-ghost"
+              disabled={isSelf}
+              title={isSelf ? "You can't delete your own account" : undefined}
+              onClick={() => setDeleting(true)}
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 

@@ -13,6 +13,7 @@ import { DescriptionList } from '@/components/ui/DescriptionList'
 import { Drawer } from '@/components/ui/Drawer'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Spinner } from '@/components/ui/Spinner'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 import { PermissionForm, PermissionFormFooter } from './PermissionForm'
@@ -22,6 +23,7 @@ export function PermissionDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { can } = useMyPermissions()
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -96,14 +98,23 @@ export function PermissionDetailPage() {
           <p className="mt-0.5 font-mono text-sm text-slate-500">{permission.code}</p>
         </div>
         <div className="flex shrink-0 gap-2">
-          <Button variant="secondary" onClick={() => setEditing(true)}>
-            <Pencil className="size-3.5" aria-hidden="true" />
-            Edit
-          </Button>
-          <Button variant="danger-ghost" disabled={permission.isSystem} onClick={() => setDeleting(true)}>
-            <Trash2 className="size-3.5" aria-hidden="true" />
-            Delete
-          </Button>
+          {can('Permissions', 'Update') && (
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit
+            </Button>
+          )}
+          {can('Permissions', 'Delete') && (
+            <Button
+              variant="danger-ghost"
+              disabled={permission.isSystem}
+              title={permission.isSystem ? "System permissions can't be deleted" : undefined}
+              onClick={() => setDeleting(true)}
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 

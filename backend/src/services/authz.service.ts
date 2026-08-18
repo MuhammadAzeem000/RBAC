@@ -22,27 +22,32 @@ export async function userHasPermission(
   return match !== null;
 }
 
-// Distinct module names reachable through any of the user's active roles'
-// active permissions — drives nav/menu visibility on the frontend.
-export async function getMyModuleNames(userId: bigint): Promise<string[]> {
+// For each module reachable through any of the user's active roles' active
+// permissions, the distinct action names granted on it — drives both nav/menu
+// visibility and per-action (create/edit/delete) control gating on the frontend.
+export async function getMyPermissions(userId: bigint): Promise<{ name: string; actions: string[] }[]> {
+  const roleFilter = { isActive: true, deletedAt: null, userRoles: { some: { userId } } } as const;
+
   const modules = await prisma.module.findMany({
     where: {
       isActive: true,
       deletedAt: null,
       permissions: {
-        some: {
-          isActive: true,
-          deletedAt: null,
-          rolePermissions: {
-            some: {
-              role: { isActive: true, deletedAt: null, userRoles: { some: { userId } } },
-            },
-          },
-        },
+        some: { isActive: true, deletedAt: null, rolePermissions: { some: { role: roleFilter } } },
       },
     },
-    select: { name: true },
+    select: {
+      name: true,
+      permissions: {
+        where: { isActive: true, deletedAt: null, rolePermissions: { some: { role: roleFilter } } },
+        select: { action: { select: { name: true } } },
+      },
+    },
     orderBy: { sortOrder: "asc" },
   });
-  return modules.map((module) => module.name);
+
+  return modules.map((module) => ({
+    name: module.name,
+    actions: [...new Set(module.permissions.map((permission) => permission.action.name))],
+  }));
 }

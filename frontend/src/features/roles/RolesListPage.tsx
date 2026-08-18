@@ -14,6 +14,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useMyRoleIds } from '@/hooks/useCurrentUserAssignments'
 import { useListState } from '@/hooks/useListState'
+import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
 import type { Role } from '@/types/role'
@@ -26,6 +27,7 @@ export function RolesListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const myRoleIds = useMyRoleIds()
+  const { can } = useMyPermissions()
   const { page, pageSize, search, isActive, setPage, setPageSize, setSearch, setIsActive } = useListState()
 
   const [drawerRole, setDrawerRole] = useState<Role | 'new' | null>(null)
@@ -110,6 +112,8 @@ export function RolesListPage() {
       cell: (info) => {
         const role = info.row.original
         const isMine = myRoleIds.has(role.id)
+        const canUpdate = can('Roles', 'Update')
+        const canDelete = can('Roles', 'Delete')
         const disableDelete = role.isSystem || isMine
         const deleteLabel = role.isSystem
           ? "System roles can't be deleted"
@@ -124,50 +128,55 @@ export function RolesListPage() {
             : undefined
         return (
           <div className="flex justify-end gap-1">
-            {role.isActive ? (
+            {canUpdate &&
+              (role.isActive ? (
+                <IconButton
+                  label={activeToggleLabel ?? 'Deactivate role'}
+                  variant="danger"
+                  disabled={disableActiveToggle}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeactivateTarget(role)
+                  }}
+                >
+                  <PowerOff className="size-3.5" aria-hidden="true" />
+                </IconButton>
+              ) : (
+                <IconButton
+                  label={activeToggleLabel ?? 'Activate role'}
+                  disabled={disableActiveToggle || setActiveMutation.isPending}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setActiveMutation.mutate({ id: role.id, isActive: true })
+                  }}
+                >
+                  <Power className="size-3.5" aria-hidden="true" />
+                </IconButton>
+              ))}
+            {canUpdate && (
               <IconButton
-                label={activeToggleLabel ?? 'Deactivate role'}
-                variant="danger"
-                disabled={disableActiveToggle}
+                label="Edit role"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setDeactivateTarget(role)
+                  setDrawerRole(role)
                 }}
               >
-                <PowerOff className="size-3.5" aria-hidden="true" />
-              </IconButton>
-            ) : (
-              <IconButton
-                label={activeToggleLabel ?? 'Activate role'}
-                disabled={disableActiveToggle || setActiveMutation.isPending}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setActiveMutation.mutate({ id: role.id, isActive: true })
-                }}
-              >
-                <Power className="size-3.5" aria-hidden="true" />
+                <Pencil className="size-3.5" aria-hidden="true" />
               </IconButton>
             )}
-            <IconButton
-              label="Edit role"
-              onClick={(e) => {
-                e.stopPropagation()
-                setDrawerRole(role)
-              }}
-            >
-              <Pencil className="size-3.5" aria-hidden="true" />
-            </IconButton>
-            <IconButton
-              label={deleteLabel}
-              variant="danger"
-              disabled={disableDelete}
-              onClick={(e) => {
-                e.stopPropagation()
-                setDeleteTarget(role)
-              }}
-            >
-              <Trash2 className="size-3.5" aria-hidden="true" />
-            </IconButton>
+            {canDelete && (
+              <IconButton
+                label={deleteLabel}
+                variant="danger"
+                disabled={disableDelete}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDeleteTarget(role)
+                }}
+              >
+                <Trash2 className="size-3.5" aria-hidden="true" />
+              </IconButton>
+            )}
           </div>
         )
       },
@@ -183,10 +192,12 @@ export function RolesListPage() {
         title="Roles"
         description="Bundles of permissions you can assign to users."
         actions={
-          <Button variant="primary" onClick={() => setDrawerRole('new')}>
-            <Plus className="size-3.5" aria-hidden="true" />
-            New role
-          </Button>
+          can('Roles', 'Create') && (
+            <Button variant="primary" onClick={() => setDrawerRole('new')}>
+              <Plus className="size-3.5" aria-hidden="true" />
+              New role
+            </Button>
+          )
         }
       />
 

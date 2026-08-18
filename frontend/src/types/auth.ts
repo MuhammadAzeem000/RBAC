@@ -22,8 +22,10 @@ export interface LoginResponse extends AuthTokens {
   user: User
 }
 
-// A module the caller's roles grant any permission on — drives nav visibility.
+// A module the caller's roles grant any permission on — drives nav visibility
+// and, via `actions`, per-action (create/edit/delete) control gating.
 export interface ModuleAccess {
   name: string
   isEnabled: boolean
+  actions: string[]
 }
