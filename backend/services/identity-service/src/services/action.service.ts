@@ -40,12 +40,19 @@ export function getActionById(id: bigint): Promise<ActionResponse | null> {
   return prisma.action.findFirst({ where: { id, deletedAt: null }, select: actionSelect });
 }
 
-export function createAction(input: CreateActionInput): Promise<ActionResponse> {
-  return prisma.action.create({ data: input, select: actionSelect });
+export function createAction(
+  input: CreateActionInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<ActionResponse> {
+  return tx.action.create({ data: input, select: actionSelect });
 }
 
-export function updateAction(id: bigint, input: UpdateActionInput): Promise<ActionResponse> {
-  return prisma.action.update({ where: { id }, data: input, select: actionSelect });
+export function updateAction(
+  id: bigint,
+  input: UpdateActionInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<ActionResponse> {
+  return tx.action.update({ where: { id }, data: input, select: actionSelect });
 }
 
 export async function actionHasPermissions(id: bigint): Promise<boolean> {
@@ -53,8 +60,8 @@ export async function actionHasPermissions(id: bigint): Promise<boolean> {
   return count > 0;
 }
 
-export function deleteAction(id: bigint): Promise<ActionResponse> {
-  return prisma.action.update({
+export function deleteAction(id: bigint, tx: Prisma.TransactionClient = prisma): Promise<ActionResponse> {
+  return tx.action.update({
     where: { id },
     data: { deletedAt: new Date(), isActive: false },
     select: actionSelect,

@@ -13,7 +13,13 @@ jest.mock("../services/role.service");
 jest.mock("../services/permission.service");
 jest.mock("../services/userRole.service");
 jest.mock("../services/rolePermission.service");
-jest.mock("../services/auditLog.service");
+jest.mock("../services/outbox.service");
+jest.mock("../config/prisma", () => ({
+  // Controllers wrap the (fully-mocked) service calls in
+  // prisma.$transaction(...) — the callback just needs to run with some
+  // stand-in "tx" object, since the mocked service functions ignore it.
+  prisma: { $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback({})) },
+}));
 
 function mockRes() {
   const res = {} as Response;
@@ -50,7 +56,7 @@ describe("userRole associations", () => {
 
     await userRoleController.assignRoleToUser(req, res);
 
-    expect(userRoleService.assignRoleToUser).toHaveBeenCalledWith(1n, 2n);
+    expect(userRoleService.assignRoleToUser).toHaveBeenCalledWith(1n, 2n, expect.anything());
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
@@ -121,7 +127,7 @@ describe("rolePermission associations", () => {
 
     await rolePermissionController.assignPermissionToRole(req, res);
 
-    expect(rolePermissionService.assignPermissionToRole).toHaveBeenCalledWith(1n, 2n);
+    expect(rolePermissionService.assignPermissionToRole).toHaveBeenCalledWith(1n, 2n, expect.anything());
     expect(res.status).toHaveBeenCalledWith(201);
   });
 

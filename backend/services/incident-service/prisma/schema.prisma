@@ -193,3 +193,39 @@ model TimelineEvent {
   @@index([createdAt])
   @@map("incident_timeline_events")
 }
+
+// Transactional outbox for CENTRAL audit-service delivery — a separate
+// concern from TimelineEvent above (which stays exactly as it is: the
+// incident-scoped audit/UX trail this service's own API and frontend use).
+// Only the mutations the SOAR MVP spec calls out for cross-service audit
+// (incident creation/update/status/severity/assignment/closure) write here;
+// tasks/evidence/comments/playbook runs are still recorded in
+// TimelineEvent only, not centrally audited — see
+// backend/services/audit-service and the project's audit-service memory
+// for the full reasoning.
+model OutboxEvent {
+  id BigInt @id @default(autoincrement())
+
+  eventId       String  @unique @map("event_id") @db.VarChar(36)
+  eventType     String  @map("event_type") @db.VarChar(100)
+  aggregateType String  @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String  @map("aggregate_id") @db.VarChar(100)
+
+  actorId   String? @map("actor_id") @db.VarChar(100)
+  actorType String  @default("USER") @map("actor_type") @db.VarChar(20)
+
+  action       String @db.VarChar(50)
+  resourceType String @map("resource_type") @db.VarChar(50)
+  resourceId   String @map("resource_id") @db.VarChar(100)
+
+  metadata Json? @db.Json
+  payload  Json? @db.Json
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamp(6)
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error") @db.Text
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}

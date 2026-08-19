@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// notification-service was stateless before this — it just consumed an
+// event and sent an email, with no record of the attempt anywhere. This
+// table is the minimum genuine "business state" needed to have something
+// for the transactional outbox pattern to attach to (the spec's own example
+// list calls out "notification creation/sending/failure" as auditable).
+model Notification {
+  id BigInt @id @default(autoincrement())
+
+  recipientEmail String  @map("recipient_email") @db.VarChar(255)
+  templateKey    String  @map("template_key") @db.VarChar(100)
+  status         String  @db.VarChar(20) // sent | failed
+  errorMessage   String? @map("error_message") @db.Text
+  relatedUserId  String? @map("related_user_id") @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([status])
+  @@index([recipientEmail])
+  @@map("notifications")
+}
+
+// Transactional outbox: recording a Notification row and its audit event
+// happen in the SAME transaction (see services/outbox.service.ts), so the
+// two can never diverge.
+model OutboxEvent {
+  id BigInt @id @default(autoincrement())
+
+  eventId       String  @unique @map("event_id") @db.VarChar(36)
+  eventType     String  @map("event_type") @db.VarChar(100)
+  aggregateType String  @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String  @map("aggregate_id") @db.VarChar(100)
+
+  actorId   String? @map("actor_id") @db.VarChar(100)
+  actorType String  @default("SYSTEM") @map("actor_type") @db.VarChar(20)
+
+  action       String @db.VarChar(50)
+  resourceType String @map("resource_type") @db.VarChar(50)
+  resourceId   String @map("resource_id") @db.VarChar(100)
+
+  metadata Json? @db.Json
+  payload  Json? @db.Json
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamp(6)
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error") @db.Text
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}

@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { prisma } from "../config/prisma";
 import { createPermissionSchema, permissionListQuerySchema, updatePermissionSchema } from "../interfaces/permission";
-import * as auditLogService from "../services/auditLog.service";
+import * as outboxService from "../services/outbox.service";
 import * as permissionService from "../services/permission.service";
 import { parseBigIntId, parseQuery } from "../utils";
 
@@ -41,12 +42,19 @@ export async function createPermission(req: Request, res: Response) {
     return;
   }
 
-  const permission = await permissionService.createPermission(result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "permission.create",
-    targetType: "permission",
-    targetId: permission.id,
+  const permission = await prisma.$transaction(async (tx) => {
+    const created = await permissionService.createPermission(result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "PERMISSION_CREATED",
+      aggregateType: "PERMISSION",
+      aggregateId: created.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "CREATE",
+      resourceType: "PERMISSION",
+      resourceId: created.id.toString(),
+      payload: { name: created.name },
+    });
+    return created;
   });
   res.status(201).json(permission);
 }
@@ -61,12 +69,19 @@ export async function updatePermission(req: Request, res: Response) {
     return;
   }
 
-  const permission = await permissionService.updatePermission(id, result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "permission.update",
-    targetType: "permission",
-    targetId: permission.id,
+  const permission = await prisma.$transaction(async (tx) => {
+    const updated = await permissionService.updatePermission(id, result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "PERMISSION_UPDATED",
+      aggregateType: "PERMISSION",
+      aggregateId: updated.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "UPDATE",
+      resourceType: "PERMISSION",
+      resourceId: updated.id.toString(),
+      payload: { name: updated.name },
+    });
+    return updated;
   });
   res.json(permission);
 }
@@ -82,12 +97,17 @@ export async function deletePermission(req: Request, res: Response) {
     return;
   }
 
-  await permissionService.deletePermission(id);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "permission.delete",
-    targetType: "permission",
-    targetId: id,
+  await prisma.$transaction(async (tx) => {
+    await permissionService.deletePermission(id, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "PERMISSION_DELETED",
+      aggregateType: "PERMISSION",
+      aggregateId: id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "DELETE",
+      resourceType: "PERMISSION",
+      resourceId: id.toString(),
+    });
   });
   res.status(204).send();
 }

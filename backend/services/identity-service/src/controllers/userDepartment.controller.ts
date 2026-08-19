@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { prisma } from "../config/prisma";
 import { bigIntId } from "../interfaces/common";
-import * as auditLogService from "../services/auditLog.service";
 import * as departmentService from "../services/department.service";
+import * as outboxService from "../services/outbox.service";
 import * as userDepartmentService from "../services/userDepartment.service";
 import * as userService from "../services/user.service";
 import { parseBigIntId, parsePagination } from "../utils";
@@ -57,17 +58,24 @@ export async function assignDepartmentToUser(req: Request, res: Response) {
     return;
   }
 
-  const assignment = await userDepartmentService.assignDepartmentToUser(
-    userId,
-    department.id,
-    result.data.isPrimary,
-  );
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "user.department.assign",
-    targetType: "user",
-    targetId: userId,
-    metadata: { departmentId: department.id.toString() },
+  const assignment = await prisma.$transaction(async (tx) => {
+    const created = await userDepartmentService.assignDepartmentToUser(
+      userId,
+      department.id,
+      result.data.isPrimary,
+      tx,
+    );
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "USER_DEPARTMENT_ASSIGNED",
+      aggregateType: "USER",
+      aggregateId: userId.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "ASSIGN",
+      resourceType: "USER",
+      resourceId: userId.toString(),
+      metadata: { departmentId: department.id.toString() },
+    });
+    return created;
   });
   res.status(201).json(assignment);
 }
@@ -80,17 +88,25 @@ export async function revokeDepartmentFromUser(req: Request, res: Response) {
     return;
   }
 
-  const revoked = await userDepartmentService.revokeDepartmentFromUser(userId, departmentId);
+  const revoked = await prisma.$transaction(async (tx) => {
+    const wasRevoked = await userDepartmentService.revokeDepartmentFromUser(userId, departmentId, tx);
+    if (wasRevoked) {
+      await outboxService.writeOutboxEvent(tx, {
+        eventType: "USER_DEPARTMENT_REVOKED",
+        aggregateType: "USER",
+        aggregateId: userId.toString(),
+        actorId: req.auth!.userId.toString(),
+        action: "REVOKE",
+        resourceType: "USER",
+        resourceId: userId.toString(),
+        metadata: { departmentId: departmentId.toString() },
+      });
+    }
+    return wasRevoked;
+  });
   if (!revoked) {
     res.status(404).json({ error: "Department assignment not found" });
     return;
   }
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "user.department.revoke",
-    targetType: "user",
-    targetId: userId,
-    metadata: { departmentId: departmentId.toString() },
-  });
   res.status(204).send();
 }

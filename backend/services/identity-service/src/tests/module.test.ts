@@ -4,8 +4,8 @@ import * as moduleController from "../controllers/module.controller";
 import { prisma } from "../config/prisma";
 import * as moduleService from "../services/module.service";
 
-jest.mock("../config/prisma", () => ({
-  prisma: {
+jest.mock("../config/prisma", () => {
+  const resources = {
     module: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -16,10 +16,11 @@ jest.mock("../config/prisma", () => ({
     permission: {
       count: jest.fn(),
     },
-  },
-}));
+  };
+  return { prisma: { ...resources, $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(resources)) } };
+});
 
-jest.mock("../services/auditLog.service");
+jest.mock("../services/outbox.service");
 
 const mockedPrisma = prisma as unknown as {
   module: {

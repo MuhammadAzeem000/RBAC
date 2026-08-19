@@ -4,8 +4,8 @@ import * as permissionController from "../controllers/permission.controller";
 import { prisma } from "../config/prisma";
 import * as permissionService from "../services/permission.service";
 
-jest.mock("../config/prisma", () => ({
-  prisma: {
+jest.mock("../config/prisma", () => {
+  const resources = {
     permission: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -16,10 +16,11 @@ jest.mock("../config/prisma", () => ({
     rolePermission: {
       count: jest.fn(),
     },
-  },
-}));
+  };
+  return { prisma: { ...resources, $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(resources)) } };
+});
 
-jest.mock("../services/auditLog.service");
+jest.mock("../services/outbox.service");
 
 const mockedPrisma = prisma as unknown as {
   permission: {

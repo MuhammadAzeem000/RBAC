@@ -3,11 +3,18 @@ import { prisma } from "../config/prisma";
 import * as incidentService from "../services/incident.service";
 import { HttpError } from "../middlewares/errorHandler";
 
-jest.mock("../config/prisma", () => ({
-  prisma: {
+jest.mock("../config/prisma", () => {
+  const resources = {
     incident: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
-  },
-}));
+  };
+  // createIncident/updateIncident/deleteIncident wrap the business write +
+  // outbox insert in prisma.$transaction(async (tx) => ...) — running the
+  // callback against these SAME mocked resources lets tx.incident.update(...)
+  // etc. resolve to the same jest.fn() the tests assert against.
+  return { prisma: { ...resources, $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(resources)) } };
+});
+
+jest.mock("../services/outbox.service");
 
 const mockedPrisma = prisma as unknown as {
   incident: { create: jest.Mock; findFirst: jest.Mock; update: jest.Mock };

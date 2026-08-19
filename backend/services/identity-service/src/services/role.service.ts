@@ -40,12 +40,16 @@ export function getRoleById(id: bigint): Promise<RoleResponse | null> {
   return prisma.role.findFirst({ where: { id, deletedAt: null }, select: roleSelect });
 }
 
-export function createRole(input: CreateRoleInput): Promise<RoleResponse> {
-  return prisma.role.create({ data: input, select: roleSelect });
+export function createRole(input: CreateRoleInput, tx: Prisma.TransactionClient = prisma): Promise<RoleResponse> {
+  return tx.role.create({ data: input, select: roleSelect });
 }
 
-export function updateRole(id: bigint, input: UpdateRoleInput): Promise<RoleResponse> {
-  return prisma.role.update({ where: { id }, data: input, select: roleSelect });
+export function updateRole(
+  id: bigint,
+  input: UpdateRoleInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<RoleResponse> {
+  return tx.role.update({ where: { id }, data: input, select: roleSelect });
 }
 
 export async function roleHasUserAssignments(id: bigint): Promise<boolean> {
@@ -53,8 +57,8 @@ export async function roleHasUserAssignments(id: bigint): Promise<boolean> {
   return count > 0;
 }
 
-export function deleteRole(id: bigint): Promise<RoleResponse> {
-  return prisma.role.update({
+export function deleteRole(id: bigint, tx: Prisma.TransactionClient = prisma): Promise<RoleResponse> {
+  return tx.role.update({
     where: { id },
     data: { deletedAt: new Date(), isActive: false },
     select: roleSelect,

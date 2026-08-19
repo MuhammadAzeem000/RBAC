@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { prisma } from "../config/prisma";
 import { createUserSchema, updateUserSchema, userListQuerySchema } from "../interfaces/user";
-import * as auditLogService from "../services/auditLog.service";
+import * as outboxService from "../services/outbox.service";
 import * as userService from "../services/user.service";
 import { publishEvent } from "../events/eventBus.service";
 import { USER_CREATED_ROUTING_KEY } from "../events/topology";
@@ -43,12 +44,19 @@ export async function createUser(req: Request, res: Response) {
     return;
   }
 
-  const user = await userService.createUser(result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "user.create",
-    targetType: "user",
-    targetId: user.id,
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await userService.createUser(result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "USER_CREATED",
+      aggregateType: "USER",
+      aggregateId: created.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "CREATE",
+      resourceType: "USER",
+      resourceId: created.id.toString(),
+      payload: { name: created.name, email: created.email },
+    });
+    return created;
   });
   // Fire-and-forget: the welcome email is a side effect of user creation,
   // not a precondition for it — publishEvent() never throws, so a broker
@@ -76,12 +84,19 @@ export async function updateUser(req: Request, res: Response) {
     return;
   }
 
-  const user = await userService.updateUser(id, result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "user.update",
-    targetType: "user",
-    targetId: user.id,
+  const user = await prisma.$transaction(async (tx) => {
+    const updated = await userService.updateUser(id, result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "USER_UPDATED",
+      aggregateType: "USER",
+      aggregateId: updated.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "UPDATE",
+      resourceType: "USER",
+      resourceId: updated.id.toString(),
+      payload: { name: updated.name, email: updated.email },
+    });
+    return updated;
   });
   res.json(user);
 }
@@ -95,12 +110,17 @@ export async function deleteUser(req: Request, res: Response) {
     return;
   }
 
-  await userService.deleteUser(id);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "user.delete",
-    targetType: "user",
-    targetId: id,
+  await prisma.$transaction(async (tx) => {
+    await userService.deleteUser(id, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "USER_DELETED",
+      aggregateType: "USER",
+      aggregateId: id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "DELETE",
+      resourceType: "USER",
+      resourceId: id.toString(),
+    });
   });
   res.status(204).send();
 }

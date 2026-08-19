@@ -1,9 +1,15 @@
 export interface AuditLogEntry {
   id: string
-  actorUserId: string
+  eventId: string
+  eventType: string
+  service: string
+  actorId: string | null
+  actorType: string
   action: string
-  targetType: string
-  targetId: string | null
+  resourceType: string
+  resourceId: string
   metadata: unknown
-  createdAt: string
+  payload: unknown
+  occurredAt: string
+  receivedAt: string
 }

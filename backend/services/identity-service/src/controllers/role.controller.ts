@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { prisma } from "../config/prisma";
 import { createRoleSchema, roleListQuerySchema, updateRoleSchema } from "../interfaces/role";
-import * as auditLogService from "../services/auditLog.service";
+import * as outboxService from "../services/outbox.service";
 import * as roleService from "../services/role.service";
 import * as userRoleService from "../services/userRole.service";
 import { parseBigIntId, parseQuery } from "../utils";
@@ -42,12 +43,19 @@ export async function createRole(req: Request, res: Response) {
     return;
   }
 
-  const role = await roleService.createRole(result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "role.create",
-    targetType: "role",
-    targetId: role.id,
+  const role = await prisma.$transaction(async (tx) => {
+    const created = await roleService.createRole(result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "ROLE_CREATED",
+      aggregateType: "ROLE",
+      aggregateId: created.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "CREATE",
+      resourceType: "ROLE",
+      resourceId: created.id.toString(),
+      payload: { name: created.name },
+    });
+    return created;
   });
   res.status(201).json(role);
 }
@@ -67,12 +75,19 @@ export async function updateRole(req: Request, res: Response) {
     return;
   }
 
-  const role = await roleService.updateRole(id, result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "role.update",
-    targetType: "role",
-    targetId: role.id,
+  const role = await prisma.$transaction(async (tx) => {
+    const updated = await roleService.updateRole(id, result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "ROLE_UPDATED",
+      aggregateType: "ROLE",
+      aggregateId: updated.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "UPDATE",
+      resourceType: "ROLE",
+      resourceId: updated.id.toString(),
+      payload: { name: updated.name },
+    });
+    return updated;
   });
   res.json(role);
 }
@@ -91,12 +106,17 @@ export async function deleteRole(req: Request, res: Response) {
     return;
   }
 
-  await roleService.deleteRole(id);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "role.delete",
-    targetType: "role",
-    targetId: id,
+  await prisma.$transaction(async (tx) => {
+    await roleService.deleteRole(id, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "ROLE_DELETED",
+      aggregateType: "ROLE",
+      aggregateId: id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "DELETE",
+      resourceType: "ROLE",
+      resourceId: id.toString(),
+    });
   });
   res.status(204).send();
 }

@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { prisma } from "../config/prisma";
 import { bigIntId } from "../interfaces/common";
-import * as auditLogService from "../services/auditLog.service";
+import * as outboxService from "../services/outbox.service";
 import * as permissionService from "../services/permission.service";
 import * as roleService from "../services/role.service";
 import * as rolePermissionService from "../services/rolePermission.service";
@@ -54,13 +55,19 @@ export async function assignPermissionToRole(req: Request, res: Response) {
     return;
   }
 
-  const assignment = await rolePermissionService.assignPermissionToRole(roleId, permission.id);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "role.permission.assign",
-    targetType: "role",
-    targetId: roleId,
-    metadata: { permissionId: permission.id.toString() },
+  const assignment = await prisma.$transaction(async (tx) => {
+    const created = await rolePermissionService.assignPermissionToRole(roleId, permission.id, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "ROLE_PERMISSION_ASSIGNED",
+      aggregateType: "ROLE",
+      aggregateId: roleId.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "ASSIGN",
+      resourceType: "ROLE",
+      resourceId: roleId.toString(),
+      metadata: { permissionId: permission.id.toString() },
+    });
+    return created;
   });
   res.status(201).json(assignment);
 }
@@ -73,17 +80,25 @@ export async function revokePermissionFromRole(req: Request, res: Response) {
     return;
   }
 
-  const revoked = await rolePermissionService.revokePermissionFromRole(roleId, permissionId);
+  const revoked = await prisma.$transaction(async (tx) => {
+    const wasRevoked = await rolePermissionService.revokePermissionFromRole(roleId, permissionId, tx);
+    if (wasRevoked) {
+      await outboxService.writeOutboxEvent(tx, {
+        eventType: "ROLE_PERMISSION_REVOKED",
+        aggregateType: "ROLE",
+        aggregateId: roleId.toString(),
+        actorId: req.auth!.userId.toString(),
+        action: "REVOKE",
+        resourceType: "ROLE",
+        resourceId: roleId.toString(),
+        metadata: { permissionId: permissionId.toString() },
+      });
+    }
+    return wasRevoked;
+  });
   if (!revoked) {
     res.status(404).json({ error: "Permission assignment not found" });
     return;
   }
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "role.permission.revoke",
-    targetType: "role",
-    targetId: roleId,
-    metadata: { permissionId: permissionId.toString() },
-  });
   res.status(204).send();
 }

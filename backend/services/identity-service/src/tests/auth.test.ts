@@ -9,17 +9,19 @@ import * as authController from "../controllers/auth.controller";
 import { authenticate } from "../middlewares/authenticate";
 import { bootstrapFirstAdmin } from "../services/bootstrap.service";
 
-jest.mock("../config/prisma", () => ({
-  prisma: {
+jest.mock("../config/prisma", () => {
+  const resources = {
     user: { findFirst: jest.fn(), update: jest.fn() },
-  },
-}));
+  };
+  return { prisma: { ...resources, $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(resources)) } };
+});
 
 jest.mock("bcryptjs", () => ({
   compare: jest.fn(),
 }));
 
 jest.mock("../services/bootstrap.service");
+jest.mock("../services/outbox.service");
 
 const mockedPrisma = prisma as unknown as {
   user: { findFirst: jest.Mock; update: jest.Mock };

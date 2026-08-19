@@ -43,12 +43,19 @@ export function getModuleById(id: bigint): Promise<ModuleResponse | null> {
   return prisma.module.findFirst({ where: { id, deletedAt: null }, select: moduleSelect });
 }
 
-export function createModule(input: CreateModuleInput): Promise<ModuleResponse> {
-  return prisma.module.create({ data: input, select: moduleSelect });
+export function createModule(
+  input: CreateModuleInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<ModuleResponse> {
+  return tx.module.create({ data: input, select: moduleSelect });
 }
 
-export function updateModule(id: bigint, input: UpdateModuleInput): Promise<ModuleResponse> {
-  return prisma.module.update({ where: { id }, data: input, select: moduleSelect });
+export function updateModule(
+  id: bigint,
+  input: UpdateModuleInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<ModuleResponse> {
+  return tx.module.update({ where: { id }, data: input, select: moduleSelect });
 }
 
 export async function moduleHasPermissions(id: bigint): Promise<boolean> {
@@ -56,8 +63,8 @@ export async function moduleHasPermissions(id: bigint): Promise<boolean> {
   return count > 0;
 }
 
-export function deleteModule(id: bigint): Promise<ModuleResponse> {
-  return prisma.module.update({
+export function deleteModule(id: bigint, tx: Prisma.TransactionClient = prisma): Promise<ModuleResponse> {
+  return tx.module.update({
     where: { id },
     data: { deletedAt: new Date(), isActive: false },
     select: moduleSelect,

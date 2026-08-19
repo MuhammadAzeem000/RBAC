@@ -49,9 +49,12 @@ export function getUserById(id: bigint): Promise<UserResponse | null> {
   return prisma.user.findFirst({ where: { id, deletedAt: null }, select: userSelect });
 }
 
-export async function createUser(input: CreateUserInput): Promise<UserResponse> {
+export async function createUser(
+  input: CreateUserInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<UserResponse> {
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
-  return prisma.user.create({
+  return tx.user.create({
     data: {
       name: input.name,
       email: input.email,
@@ -61,10 +64,14 @@ export async function createUser(input: CreateUserInput): Promise<UserResponse> 
   });
 }
 
-export async function updateUser(id: bigint, input: UpdateUserInput): Promise<UserResponse> {
+export async function updateUser(
+  id: bigint,
+  input: UpdateUserInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<UserResponse> {
   const { password, ...rest } = input;
 
-  return prisma.user.update({
+  return tx.user.update({
     where: { id },
     data: {
       ...rest,
@@ -74,8 +81,8 @@ export async function updateUser(id: bigint, input: UpdateUserInput): Promise<Us
   });
 }
 
-export function deleteUser(id: bigint): Promise<UserResponse> {
-  return prisma.user.update({
+export function deleteUser(id: bigint, tx: Prisma.TransactionClient = prisma): Promise<UserResponse> {
+  return tx.user.update({
     where: { id },
     data: { deletedAt: new Date(), isActive: false },
     select: userSelect,

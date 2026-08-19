@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { prisma } from "../config/prisma";
 import { bigIntId } from "../interfaces/common";
-import * as auditLogService from "../services/auditLog.service";
+import * as outboxService from "../services/outbox.service";
 import * as roleService from "../services/role.service";
 import * as userRoleService from "../services/userRole.service";
 import * as userService from "../services/user.service";
@@ -54,13 +55,19 @@ export async function assignRoleToUser(req: Request, res: Response) {
     return;
   }
 
-  const assignment = await userRoleService.assignRoleToUser(userId, role.id);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "user.role.assign",
-    targetType: "user",
-    targetId: userId,
-    metadata: { roleId: role.id.toString() },
+  const assignment = await prisma.$transaction(async (tx) => {
+    const created = await userRoleService.assignRoleToUser(userId, role.id, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "USER_ROLE_ASSIGNED",
+      aggregateType: "USER",
+      aggregateId: userId.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "ASSIGN",
+      resourceType: "USER",
+      resourceId: userId.toString(),
+      metadata: { roleId: role.id.toString() },
+    });
+    return created;
   });
   res.status(201).json(assignment);
 }
@@ -73,17 +80,25 @@ export async function revokeRoleFromUser(req: Request, res: Response) {
     return;
   }
 
-  const revoked = await userRoleService.revokeRoleFromUser(userId, roleId);
+  const revoked = await prisma.$transaction(async (tx) => {
+    const wasRevoked = await userRoleService.revokeRoleFromUser(userId, roleId, tx);
+    if (wasRevoked) {
+      await outboxService.writeOutboxEvent(tx, {
+        eventType: "USER_ROLE_REVOKED",
+        aggregateType: "USER",
+        aggregateId: userId.toString(),
+        actorId: req.auth!.userId.toString(),
+        action: "REVOKE",
+        resourceType: "USER",
+        resourceId: userId.toString(),
+        metadata: { roleId: roleId.toString() },
+      });
+    }
+    return wasRevoked;
+  });
   if (!revoked) {
     res.status(404).json({ error: "Role assignment not found" });
     return;
   }
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "user.role.revoke",
-    targetType: "user",
-    targetId: userId,
-    metadata: { roleId: roleId.toString() },
-  });
   res.status(204).send();
 }

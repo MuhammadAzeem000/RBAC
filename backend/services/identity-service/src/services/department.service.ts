@@ -41,12 +41,19 @@ export function getDepartmentById(id: bigint): Promise<DepartmentResponse | null
   return prisma.department.findFirst({ where: { id, deletedAt: null }, select: departmentSelect });
 }
 
-export function createDepartment(input: CreateDepartmentInput): Promise<DepartmentResponse> {
-  return prisma.department.create({ data: input, select: departmentSelect });
+export function createDepartment(
+  input: CreateDepartmentInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<DepartmentResponse> {
+  return tx.department.create({ data: input, select: departmentSelect });
 }
 
-export function updateDepartment(id: bigint, input: UpdateDepartmentInput): Promise<DepartmentResponse> {
-  return prisma.department.update({ where: { id }, data: input, select: departmentSelect });
+export function updateDepartment(
+  id: bigint,
+  input: UpdateDepartmentInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<DepartmentResponse> {
+  return tx.department.update({ where: { id }, data: input, select: departmentSelect });
 }
 
 export async function departmentHasUserAssignments(id: bigint): Promise<boolean> {
@@ -54,8 +61,8 @@ export async function departmentHasUserAssignments(id: bigint): Promise<boolean>
   return count > 0;
 }
 
-export function deleteDepartment(id: bigint): Promise<DepartmentResponse> {
-  return prisma.department.update({
+export function deleteDepartment(id: bigint, tx: Prisma.TransactionClient = prisma): Promise<DepartmentResponse> {
+  return tx.department.update({
     where: { id },
     data: { deletedAt: new Date(), isActive: false },
     select: departmentSelect,

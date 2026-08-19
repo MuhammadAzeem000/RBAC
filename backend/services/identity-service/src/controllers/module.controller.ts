@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { prisma } from "../config/prisma";
 import { createModuleSchema, moduleListQuerySchema, updateModuleSchema } from "../interfaces/module";
-import * as auditLogService from "../services/auditLog.service";
 import * as moduleService from "../services/module.service";
+import * as outboxService from "../services/outbox.service";
 import { parseBigIntId, parseQuery } from "../utils";
 
 function parseId(req: Request, res: Response): bigint | null {
@@ -41,12 +42,19 @@ export async function createModule(req: Request, res: Response) {
     return;
   }
 
-  const module = await moduleService.createModule(result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "module.create",
-    targetType: "module",
-    targetId: module.id,
+  const module = await prisma.$transaction(async (tx) => {
+    const created = await moduleService.createModule(result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "MODULE_CREATED",
+      aggregateType: "MODULE",
+      aggregateId: created.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "CREATE",
+      resourceType: "MODULE",
+      resourceId: created.id.toString(),
+      payload: { name: created.name },
+    });
+    return created;
   });
   res.status(201).json(module);
 }
@@ -61,12 +69,19 @@ export async function updateModule(req: Request, res: Response) {
     return;
   }
 
-  const module = await moduleService.updateModule(id, result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "module.update",
-    targetType: "module",
-    targetId: module.id,
+  const module = await prisma.$transaction(async (tx) => {
+    const updated = await moduleService.updateModule(id, result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "MODULE_UPDATED",
+      aggregateType: "MODULE",
+      aggregateId: updated.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "UPDATE",
+      resourceType: "MODULE",
+      resourceId: updated.id.toString(),
+      payload: { name: updated.name },
+    });
+    return updated;
   });
   res.json(module);
 }
@@ -82,12 +97,17 @@ export async function deleteModule(req: Request, res: Response) {
     return;
   }
 
-  await moduleService.deleteModule(id);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "module.delete",
-    targetType: "module",
-    targetId: id,
+  await prisma.$transaction(async (tx) => {
+    await moduleService.deleteModule(id, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "MODULE_DELETED",
+      aggregateType: "MODULE",
+      aggregateId: id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "DELETE",
+      resourceType: "MODULE",
+      resourceId: id.toString(),
+    });
   });
   res.status(204).send();
 }

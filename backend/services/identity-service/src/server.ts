@@ -4,7 +4,6 @@ import cors from "cors";
 import express from "express";
 import { Request, Response } from "express";
 import { actionRouter } from "./routes/action.routes";
-import { auditLogRouter } from "./routes/auditLog.routes";
 import { authRouter } from "./routes/auth.routes";
 import { departmentRouter } from "./routes/department.routes";
 import { connectEventBus } from "./events/eventBus.service";
@@ -13,6 +12,7 @@ import { authenticate } from "./middlewares/authenticate";
 import { MODULE_NAMES } from "./constants/rbac";
 import { moduleRouter } from "./routes/module.routes";
 import { ensureModuleSeeded } from "./services/moduleSeed.service";
+import { startOutboxPublisher } from "./services/outboxPublisher.service";
 import { notFound } from "./middlewares/notFound";
 import { permissionRouter } from "./routes/permission.routes";
 import { roleRouter } from "./routes/role.routes";
@@ -42,7 +42,9 @@ app.use("/api/roles", authenticate, roleRouter);
 app.use("/api/modules", authenticate, moduleRouter);
 app.use("/api/actions", authenticate, actionRouter);
 app.use("/api/permissions", authenticate, permissionRouter);
-app.use("/api/audit-logs", authenticate, auditLogRouter);
+// Audit logs are no longer served here — audit-service is now the sole
+// authoritative store (see backend/services/audit-service), reached via the
+// gateway's own "/api/audit-logs" route.
 
 app.use(notFound);
 app.use(errorHandler);
@@ -60,3 +62,10 @@ void connectEventBus();
 // bootstrapped before incident-service existed — safe to run on every boot,
 // idempotent (find-or-create), and cheap. Does not block request handling.
 void ensureModuleSeeded(MODULE_NAMES.INCIDENTS, 8);
+
+// Delivers this service's transactional-outbox rows to audit-service — see
+// services/outbox.service.ts (the write side, used inside business
+// transactions) and services/outboxPublisher.service.ts (this, the delivery
+// side). Independent of connectEventBus() above; audit events are not
+// domain events.
+startOutboxPublisher();

@@ -132,13 +132,44 @@ services:
     ports:
       - "4200:4200"
 
-  # No healthcheck on the two services above (a bare node:20-alpine image has
+  audit-service:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
+    volumes:
+      - ./backend/services/audit-service:/app
+      - audit_dev_node_modules:/app/node_modules
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_started
+    environment:
+      PORT: 4400
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: audit_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4400:4400"
+
+  # No healthcheck on the services above (a bare node:20-alpine image has
   # no wget/curl without an extra apk add), so downstream depends_on here use
-  # service_started, not service_healthy — identity-service/incident-service
-  # take a few seconds after container start (npm ci + prisma generate +
-  # migrate deploy) before they're actually accepting requests. The gateway
-  # and frontend handle this fine (a request that arrives too early just
-  # fails once and you retry in the browser); nothing crash-loops over it.
+  # service_started, not service_healthy — identity-service/incident-service/
+  # audit-service take a few seconds after container start (npm ci + prisma
+  # generate + migrate deploy) before they're actually accepting requests.
+  # The gateway and frontend handle this fine (a request that arrives too
+  # early just fails once and you retry in the browser); nothing crash-loops
+  # over it.
   api-gateway:
     image: node:20-alpine
     working_dir: /app
@@ -150,27 +181,36 @@ services:
     depends_on:
       - identity-service
       - incident-service
+      - audit-service
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
       INCIDENT_SERVICE_URL: http://incident-service:4200
+      AUDIT_SERVICE_URL: http://audit-service:4400
     ports:
       - "8090:8000"
 
   notification-service:
     image: node:20-alpine
     working_dir: /app
-    command: sh -c "npm ci && npm run dev:polling"
+    command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
     volumes:
       - ./backend/services/notification-service:/app
       - notification_dev_node_modules:/app/node_modules
     restart: unless-stopped
     depends_on:
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
       PORT: 4100
       NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: notification_db
       RABBITMQ_URL: amqp://rabbitmq:5672
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
@@ -201,6 +241,7 @@ volumes:
   postgres_dev_data:
   identity_dev_node_modules:
   incident_dev_node_modules:
+  audit_dev_node_modules:
   gateway_dev_node_modules:
   notification_dev_node_modules:
   frontend_dev_node_modules:

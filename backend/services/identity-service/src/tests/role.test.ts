@@ -4,8 +4,8 @@ import * as roleController from "../controllers/role.controller";
 import { prisma } from "../config/prisma";
 import * as roleService from "../services/role.service";
 
-jest.mock("../config/prisma", () => ({
-  prisma: {
+jest.mock("../config/prisma", () => {
+  const resources = {
     role: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -17,10 +17,11 @@ jest.mock("../config/prisma", () => ({
       findFirst: jest.fn(),
       count: jest.fn(),
     },
-  },
-}));
+  };
+  return { prisma: { ...resources, $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(resources)) } };
+});
 
-jest.mock("../services/auditLog.service");
+jest.mock("../services/outbox.service");
 
 const mockedPrisma = prisma as unknown as {
   role: {

@@ -5,6 +5,7 @@ import { prisma } from "../config/prisma";
 import { AccessTokenClaims, AuthTokens, LoginInput, RefreshTokenClaims, RegisterInput } from "../interfaces/auth";
 import { UserResponse } from "../interfaces/user";
 import { bootstrapFirstAdmin } from "./bootstrap.service";
+import { writeOutboxEvent } from "./outbox.service";
 
 const credentialSelect = {
   id: true,
@@ -66,9 +67,24 @@ export async function login(
   const passwordMatches = await bcrypt.compare(input.password, user.passwordHash);
   if (!passwordMatches) return null;
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date(), lastLoginIp: ip ?? undefined },
+  // The lastLoginAt/lastLoginIp write and the LOGIN_SUCCEEDED audit event
+  // are the same "business operation" for outbox purposes — one atomic
+  // transaction, even though there's no separate mutation being audited.
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date(), lastLoginIp: ip ?? undefined },
+    });
+    await writeOutboxEvent(tx, {
+      eventType: "USER_LOGIN_SUCCEEDED",
+      aggregateType: "USER",
+      aggregateId: user.id.toString(),
+      actorId: user.id.toString(),
+      action: "LOGIN",
+      resourceType: "USER",
+      resourceId: user.id.toString(),
+      metadata: ip ? { ip } : undefined,
+    });
   });
 
   const { passwordHash: _passwordHash, ...safeUser } = user;

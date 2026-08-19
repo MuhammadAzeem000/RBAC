@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../config/prisma";
 import { ACTION_NAMES, MODULE_NAMES } from "../constants/rbac";
 import { UserResponse } from "../interfaces/user";
+import { writeOutboxEvent } from "./outbox.service";
 
 const SALT_ROUNDS = 10;
 
@@ -122,6 +123,21 @@ export async function bootstrapFirstAdmin(input: BootstrapFirstAdminInput): Prom
     });
 
     await tx.userRole.create({ data: { userId: user.id, roleId: role.id } });
+
+    // Bootstrap registration is a genuine account-state-changing/security
+    // event (spec: "authentication/security events") — in the same
+    // transaction as everything above, so a rollback of the bootstrap (e.g.
+    // the race-check above losing to a concurrent call) also rolls this back.
+    await writeOutboxEvent(tx, {
+      eventType: "USER_REGISTERED",
+      aggregateType: "USER",
+      aggregateId: user.id.toString(),
+      actorId: user.id.toString(),
+      action: "REGISTER",
+      resourceType: "USER",
+      resourceId: user.id.toString(),
+      payload: { name: user.name, email: user.email },
+    });
 
     return user;
   });

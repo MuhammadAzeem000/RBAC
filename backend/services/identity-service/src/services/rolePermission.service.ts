@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma";
+import { Prisma } from "../generated/prisma/client";
 import { buildPaginationMeta, PaginatedResult, toSkipTake } from "../interfaces/pagination";
 
 const permissionSelect = {
@@ -38,14 +39,18 @@ export async function getPermissionsForRole(
   return { data, pagination: buildPaginationMeta(total, params.page, params.pageSize) };
 }
 
-export function assignPermissionToRole(roleId: bigint, permissionId: bigint) {
-  return prisma.rolePermission.create({
+export function assignPermissionToRole(roleId: bigint, permissionId: bigint, tx: Prisma.TransactionClient = prisma) {
+  return tx.rolePermission.create({
     data: { roleId, permissionId },
     include: { permission: { select: permissionSelect } },
   });
 }
 
-export async function revokePermissionFromRole(roleId: bigint, permissionId: bigint): Promise<boolean> {
-  const { count } = await prisma.rolePermission.deleteMany({ where: { roleId, permissionId } });
+export async function revokePermissionFromRole(
+  roleId: bigint,
+  permissionId: bigint,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<boolean> {
+  const { count } = await tx.rolePermission.deleteMany({ where: { roleId, permissionId } });
   return count > 0;
 }

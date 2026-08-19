@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { prisma } from "../config/prisma";
 import { createDepartmentSchema, departmentListQuerySchema, updateDepartmentSchema } from "../interfaces/department";
-import * as auditLogService from "../services/auditLog.service";
 import * as departmentService from "../services/department.service";
+import * as outboxService from "../services/outbox.service";
 import * as userDepartmentService from "../services/userDepartment.service";
 import { parseBigIntId, parseQuery } from "../utils";
 
@@ -42,12 +43,19 @@ export async function createDepartment(req: Request, res: Response) {
     return;
   }
 
-  const department = await departmentService.createDepartment(result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "department.create",
-    targetType: "department",
-    targetId: department.id,
+  const department = await prisma.$transaction(async (tx) => {
+    const created = await departmentService.createDepartment(result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "DEPARTMENT_CREATED",
+      aggregateType: "DEPARTMENT",
+      aggregateId: created.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "CREATE",
+      resourceType: "DEPARTMENT",
+      resourceId: created.id.toString(),
+      payload: { name: created.name },
+    });
+    return created;
   });
   res.status(201).json(department);
 }
@@ -70,12 +78,19 @@ export async function updateDepartment(req: Request, res: Response) {
     return;
   }
 
-  const department = await departmentService.updateDepartment(id, result.data);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "department.update",
-    targetType: "department",
-    targetId: department.id,
+  const department = await prisma.$transaction(async (tx) => {
+    const updated = await departmentService.updateDepartment(id, result.data, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "DEPARTMENT_UPDATED",
+      aggregateType: "DEPARTMENT",
+      aggregateId: updated.id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "UPDATE",
+      resourceType: "DEPARTMENT",
+      resourceId: updated.id.toString(),
+      payload: { name: updated.name },
+    });
+    return updated;
   });
   res.json(department);
 }
@@ -96,12 +111,17 @@ export async function deleteDepartment(req: Request, res: Response) {
     return;
   }
 
-  await departmentService.deleteDepartment(id);
-  await auditLogService.recordAuditLog({
-    actorUserId: req.auth!.userId,
-    action: "department.delete",
-    targetType: "department",
-    targetId: id,
+  await prisma.$transaction(async (tx) => {
+    await departmentService.deleteDepartment(id, tx);
+    await outboxService.writeOutboxEvent(tx, {
+      eventType: "DEPARTMENT_DELETED",
+      aggregateType: "DEPARTMENT",
+      aggregateId: id.toString(),
+      actorId: req.auth!.userId.toString(),
+      action: "DELETE",
+      resourceType: "DEPARTMENT",
+      resourceId: id.toString(),
+    });
   });
   res.status(204).send();
 }

@@ -16,15 +16,15 @@ services:
       POSTGRES_DB: ${DB_NAME:-rbac_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Creates incident_db (incident-service's own, separate database) on a
-      # FRESH volume only — the official postgres image only runs
-      # docker-entrypoint-initdb.d scripts on first init. An already-existing
-      # volume needs the database created manually once (see the script).
+      # Creates incident_db/notification_db/audit_db (each service's own,
+      # separate database) on a FRESH volume only — the official postgres
+      # image only runs docker-entrypoint-initdb.d scripts on first init. An
+      # already-existing volume needs the databases created manually once
+      # (see the script).
       - ./backend/postgres-init:/docker-entrypoint-initdb.d
-    # Not published to the host on purpose — only identity-service and
-    # incident-service need to reach it, over the compose network by service
-    # name. Uncomment to inspect it directly with a local client (e.g. psql,
-    # a GUI tool):
+    # Not published to the host on purpose — only backend services need to
+    # reach it, over the compose network by service name. Uncomment to
+    # inspect it directly with a local client (e.g. psql, a GUI tool):
     # ports:
     #   - "5432:5432"
     healthcheck:
@@ -136,9 +136,50 @@ services:
       retries: 10
       start_period: 10s
 
+  # Sole authoritative audit-log store. Consumes every service's outbox
+  # events off the "audit.events" exchange and persists them idempotently
+  # (unique eventId). Has no RBAC tables of its own; querying is gated by
+  # calling identity-service's GET /api/auth/me/modules with the caller's
+  # own access token, same as incident-service, which is why it depends on
+  # identity-service being up, not just Postgres/RabbitMQ.
+  audit-service:
+    build:
+      context: .
+      dockerfile: backend/services/audit-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    environment:
+      PORT: 4400
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: audit_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4400:4400"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4400/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   # Reverse proxy: the single origin the frontend talks to. Routes
-  # "/api/v1/*" (incident-service's documented REST surface) to
-  # incident-service and everything else under "/api" to identity-service.
+  # "/api/v1/*" (incident-service's documented REST surface) and
+  # "/api/audit-logs*" (audit-service, the single authoritative audit-log
+  # store) to their respective services, and everything else under "/api"
+  # to identity-service.
   api-gateway:
     build:
       context: .
@@ -149,26 +190,38 @@ services:
         condition: service_healthy
       incident-service:
         condition: service_healthy
+      audit-service:
+        condition: service_healthy
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
       INCIDENT_SERVICE_URL: http://incident-service:4200
+      AUDIT_SERVICE_URL: http://audit-service:4400
     ports:
       - "8090:8000"
 
   # Consumes domain events off RabbitMQ (currently just "user.created") and
-  # sends the corresponding email. Owns no database of its own.
+  # sends the corresponding email. Also owns a small database of its own now
+  # (notification_db) — a Notification row per send attempt plus its outbox
+  # event, written atomically.
   notification-service:
     build:
       context: .
       dockerfile: backend/services/notification-service/Dockerfile
     restart: unless-stopped
     depends_on:
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
       PORT: 4100
       NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: notification_db
       RABBITMQ_URL: amqp://rabbitmq:5672
       SMTP_HOST: mailpit
       SMTP_PORT: 1025

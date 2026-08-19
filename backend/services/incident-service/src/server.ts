@@ -8,6 +8,7 @@ import { connectEventBus } from "./events/eventBus.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { incidentRouter } from "./routes/incident.routes";
 import { notFound } from "./middlewares/notFound";
+import { startOutboxPublisher } from "./services/outboxPublisher.service";
 
 const app = express();
 const PORT = env.PORT;
@@ -40,3 +41,7 @@ app.listen(PORT, () => {
 // slow-starting or temporarily unreachable broker never delays the server
 // from accepting requests.
 void connectEventBus();
+
+// Delivers this service's transactional-outbox rows to audit-service —
+// independent of connectEventBus() above; audit events are not domain events.
+startOutboxPublisher();

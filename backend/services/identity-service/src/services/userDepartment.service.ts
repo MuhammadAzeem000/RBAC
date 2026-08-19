@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma";
+import { Prisma } from "../generated/prisma/client";
 import { buildPaginationMeta, PaginatedResult, toSkipTake } from "../interfaces/pagination";
 
 const departmentSelect = {
@@ -28,15 +29,24 @@ export async function getDepartmentsForUser(
   return { data, pagination: buildPaginationMeta(total, params.page, params.pageSize) };
 }
 
-export function assignDepartmentToUser(userId: bigint, departmentId: bigint, isPrimary: boolean) {
-  return prisma.userDepartment.create({
+export function assignDepartmentToUser(
+  userId: bigint,
+  departmentId: bigint,
+  isPrimary: boolean,
+  tx: Prisma.TransactionClient = prisma,
+) {
+  return tx.userDepartment.create({
     data: { userId, departmentId, isPrimary },
     include: { department: { select: departmentSelect } },
   });
 }
 
-export async function revokeDepartmentFromUser(userId: bigint, departmentId: bigint): Promise<boolean> {
-  const { count } = await prisma.userDepartment.deleteMany({ where: { userId, departmentId } });
+export async function revokeDepartmentFromUser(
+  userId: bigint,
+  departmentId: bigint,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<boolean> {
+  const { count } = await tx.userDepartment.deleteMany({ where: { userId, departmentId } });
   return count > 0;
 }
 

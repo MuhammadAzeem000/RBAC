@@ -45,12 +45,19 @@ export function getPermissionById(id: bigint): Promise<PermissionResponse | null
   return prisma.permission.findFirst({ where: { id, deletedAt: null }, select: permissionSelect });
 }
 
-export function createPermission(input: CreatePermissionInput): Promise<PermissionResponse> {
-  return prisma.permission.create({ data: input, select: permissionSelect });
+export function createPermission(
+  input: CreatePermissionInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<PermissionResponse> {
+  return tx.permission.create({ data: input, select: permissionSelect });
 }
 
-export function updatePermission(id: bigint, input: UpdatePermissionInput): Promise<PermissionResponse> {
-  return prisma.permission.update({ where: { id }, data: input, select: permissionSelect });
+export function updatePermission(
+  id: bigint,
+  input: UpdatePermissionInput,
+  tx: Prisma.TransactionClient = prisma,
+): Promise<PermissionResponse> {
+  return tx.permission.update({ where: { id }, data: input, select: permissionSelect });
 }
 
 export async function permissionHasRoleAssignments(id: bigint): Promise<boolean> {
@@ -58,8 +65,8 @@ export async function permissionHasRoleAssignments(id: bigint): Promise<boolean>
   return count > 0;
 }
 
-export function deletePermission(id: bigint): Promise<PermissionResponse> {
-  return prisma.permission.update({
+export function deletePermission(id: bigint, tx: Prisma.TransactionClient = prisma): Promise<PermissionResponse> {
+  return tx.permission.update({
     where: { id },
     data: { deletedAt: new Date(), isActive: false },
     select: permissionSelect,

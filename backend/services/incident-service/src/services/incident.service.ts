@@ -9,6 +9,18 @@ import {
   UpdateIncidentInput,
 } from "../interfaces/incident";
 import { buildPaginationMeta, PaginatedResult, toSkipTake } from "../interfaces/pagination";
+import { writeOutboxEvent } from "./outbox.service";
+
+// Maps each classification of change (see IncidentChange below) to the
+// outbox event's eventType/action pair — these are the only incident
+// mutations centrally audited (see schema.prisma's OutboxEvent comment).
+const CHANGE_EVENT: Record<string, { eventType: string; action: string }> = {
+  status_changed: { eventType: "INCIDENT_STATUS_CHANGED", action: "STATUS_CHANGE" },
+  severity_changed: { eventType: "INCIDENT_SEVERITY_CHANGED", action: "SEVERITY_CHANGE" },
+  assigned: { eventType: "INCIDENT_ASSIGNED", action: "ASSIGN" },
+  updated: { eventType: "INCIDENT_UPDATED", action: "UPDATE" },
+  reopened: { eventType: "INCIDENT_REOPENED", action: "REOPEN" },
+};
 
 const STATUS_RANK: Record<string, number> = Object.fromEntries(STATUSES.map((s, i) => [s, i]));
 
@@ -38,24 +50,39 @@ const incidentSelect = {
   updatedAt: true,
 } as const;
 
-export function createIncident(input: CreateIncidentInput, actorUserId: bigint): Promise<IncidentResponse> {
-  return prisma.incident.create({
-    data: {
-      title: input.title,
-      description: input.description,
-      category: input.category,
-      severity: input.severity,
-      priority: input.priority,
-      tags: input.tags,
-      source: input.source,
-      externalId: input.externalId,
-      detectedAt: input.detectedAt,
-      dueAt: input.dueAt,
-      ownerUserId: input.ownerUserId,
-      status: "new",
-      createdBy: actorUserId,
-    },
-    select: incidentSelect,
+export async function createIncident(input: CreateIncidentInput, actorUserId: bigint): Promise<IncidentResponse> {
+  return prisma.$transaction(async (tx) => {
+    const incident = await tx.incident.create({
+      data: {
+        title: input.title,
+        description: input.description,
+        category: input.category,
+        severity: input.severity,
+        priority: input.priority,
+        tags: input.tags,
+        source: input.source,
+        externalId: input.externalId,
+        detectedAt: input.detectedAt,
+        dueAt: input.dueAt,
+        ownerUserId: input.ownerUserId,
+        status: "new",
+        createdBy: actorUserId,
+      },
+      select: incidentSelect,
+    });
+
+    await writeOutboxEvent(tx, {
+      eventType: "INCIDENT_CREATED",
+      aggregateType: "INCIDENT",
+      aggregateId: incident.id.toString(),
+      actorId: actorUserId.toString(),
+      action: "CREATE",
+      resourceType: "INCIDENT",
+      resourceId: incident.id.toString(),
+      payload: { title: incident.title, severity: incident.severity },
+    });
+
+    return incident;
   });
 }
 
@@ -130,7 +157,8 @@ export async function updateIncident(
   input: UpdateIncidentInput,
   actorUserId: bigint,
 ): Promise<UpdateIncidentResult> {
-  const current = await prisma.incident.findFirst({ where: { id, deletedAt: null } });
+  return prisma.$transaction(async (tx) => {
+  const current = await tx.incident.findFirst({ where: { id, deletedAt: null } });
   if (!current) {
     throw new HttpError(404, "Incident not found");
   }
@@ -251,15 +279,46 @@ export async function updateIncident(
     });
   }
 
-  const incident = await prisma.incident.update({ where: { id }, data, select: incidentSelect });
+  const incident = await tx.incident.update({ where: { id }, data, select: incidentSelect });
+
+  // One outbox event per meaningful change, in the SAME transaction as the
+  // business write above — mirrors the existing per-change TimelineEvent
+  // pattern in the controller, just for the subset of changes this service
+  // centrally audits.
+  for (const change of changes) {
+    const mapping = CHANGE_EVENT[change.type];
+    await writeOutboxEvent(tx, {
+      eventType: mapping.eventType,
+      aggregateType: "INCIDENT",
+      aggregateId: id.toString(),
+      actorId: actorUserId.toString(),
+      action: mapping.action,
+      resourceType: "INCIDENT",
+      resourceId: id.toString(),
+      metadata: change.metadata,
+    });
+  }
+
   return { incident, changes };
+  });
 }
 
 // Not part of the spec's core lifecycle (incidents are normally Closed, not
 // deleted) — added for administrative cleanup of erroneously-created
 // incidents, matching every other resource in this platform having a
 // soft-delete endpoint under the same "Delete" permission.
-export async function deleteIncident(id: bigint): Promise<void> {
+export async function deleteIncident(id: bigint, actorUserId: bigint): Promise<void> {
   await assertIncidentExists(id);
-  await prisma.incident.update({ where: { id }, data: { deletedAt: new Date() } });
+  await prisma.$transaction(async (tx) => {
+    await tx.incident.update({ where: { id }, data: { deletedAt: new Date() } });
+    await writeOutboxEvent(tx, {
+      eventType: "INCIDENT_DELETED",
+      aggregateType: "INCIDENT",
+      aggregateId: id.toString(),
+      actorId: actorUserId.toString(),
+      action: "DELETE",
+      resourceType: "INCIDENT",
+      resourceId: id.toString(),
+    });
+  });
 }

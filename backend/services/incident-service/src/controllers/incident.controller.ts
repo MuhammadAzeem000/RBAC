@@ -110,6 +110,6 @@ export async function deleteIncident(req: Request, res: Response) {
   const id = parseId(req, res);
   if (id === null) return;
 
-  await incidentService.deleteIncident(id);
+  await incidentService.deleteIncident(id, req.auth!.userId);
   res.status(204).send();
 }

@@ -4,8 +4,8 @@ import * as departmentController from "../controllers/department.controller";
 import { prisma } from "../config/prisma";
 import * as departmentService from "../services/department.service";
 
-jest.mock("../config/prisma", () => ({
-  prisma: {
+jest.mock("../config/prisma", () => {
+  const resources = {
     department: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -17,10 +17,15 @@ jest.mock("../config/prisma", () => ({
       findFirst: jest.fn(),
       count: jest.fn(),
     },
-  },
-}));
+  };
+  // Controllers wrap business writes + the outbox insert in
+  // prisma.$transaction(async (tx) => ...) — running the callback against
+  // these SAME mocked resources lets tx.department.update(...) etc. resolve
+  // to the same jest.fn() the tests assert against.
+  return { prisma: { ...resources, $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(resources)) } };
+});
 
-jest.mock("../services/auditLog.service");
+jest.mock("../services/outbox.service");
 
 const mockedPrisma = prisma as unknown as {
   department: {
