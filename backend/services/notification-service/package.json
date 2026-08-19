@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts"
+    "dev": "tsx watch src/server.ts",
+    "dev:polling": "nodemon --legacy-watch --exec tsx src/server.ts"
   },
   "dependencies": {
     "amqplib": "^0.10.4",
@@ -20,6 +21,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.2",
     "@types/nodemailer": "^6.4.15",
+    "nodemon": "^3.1.10",
     "tsx": "^4.23.7",
     "typescript": "^7.0.2"
   }

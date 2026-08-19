@@ -65,17 +65,31 @@ export async function bootstrapFirstAdmin(input: BootstrapFirstAdminInput): Prom
       }),
     );
 
+    // find-or-create, not a bare create: ensureModuleSeeded() (see
+    // moduleSeed.service.ts) also runs unconditionally on every server boot
+    // to backfill newly-added modules for already-bootstrapped systems, and
+    // on a brand-new database it can race ahead of a concurrent first
+    // registration — a bare create() here would then hit a unique
+    // constraint on [moduleId, actionId] and roll back the whole
+    // transaction, which register() reports as the misleading "already
+    // initialized" error.
     const permissions = await Promise.all(
       modules.flatMap((module) =>
-        actions.map((action) =>
-          tx.permission.create({
-            data: {
-              moduleId: module.id,
-              actionId: action.id,
-              name: `${action.name} ${module.name}`,
-            },
-          }),
-        ),
+        actions.map(async (action) => {
+          const existing = await tx.permission.findFirst({
+            where: { moduleId: module.id, actionId: action.id, deletedAt: null },
+          });
+          return (
+            existing ??
+            tx.permission.create({
+              data: {
+                moduleId: module.id,
+                actionId: action.id,
+                name: `${action.name} ${module.name}`,
+              },
+            })
+          );
+        }),
       ),
     );
 

@@ -1,0 +1,206 @@
+# Development stack: every backend service runs `tsx watch` (via nodemon in
+# --legacy-watch/polling mode) and the frontend runs the Vite dev server
+# (also polling), all with source bind-mounted from the host — edit code, see
+# it reload, no image rebuild needed. Run with:
+#
+#   docker compose -f docker-compose.dev.yml up
+#
+# Polling, not native filesystem events: Docker Desktop's Windows bind-mount
+# file sharing doesn't reliably propagate inotify-style change events into
+# the container, so a plain `tsx watch`/Vite HMR silently misses edits made
+# from the host (confirmed live: a bugfix edited on the host never triggered
+# a reload until the container was restarted). `dev:polling` wraps `tsx` in
+# nodemon's `--legacy-watch` (stat-based polling, which works over any bind
+# mount), and the frontend gets `VITE_USE_POLLING=true` (see
+# frontend/vite.config.ts). Native `npm run dev` outside Docker is unaffected
+# and keeps using plain tsx watch — polling is only needed inside this file.
+#
+# This is a STANDALONE file, not a Compose override merged with
+# docker-compose.yml (list-valued keys like ports/volumes/environment merge
+# by concatenation, not replacement, which gets confusing fast once `build`
+# vs `image` is also involved) — so it re-declares postgres/rabbitmq/mailpit
+# too. It reuses every port number from docker-compose.yml (except the
+# frontend, which is Vite's 5173 instead of nginx's 8081) and the SAME
+# project name (the current directory), so don't run both stacks at once —
+# stop one (`docker compose down` / `docker compose -f docker-compose.dev.yml
+# down`) before starting the other. Both read the same root `.env`.
+#
+# Postgres data lives in its own volume (postgres_dev_data) so dev-loop
+# experiments never touch docker-compose.yml's data. node_modules for every
+# service lives in its own named volume, layered on top of the host bind
+# mount at that one path — this keeps the container's own Linux-native
+# node_modules (installed fresh on every `up`) from being shadowed by
+# whatever's in the host's (possibly Windows-built) node_modules.
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-commtel}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      POSTGRES_DB: ${DB_NAME:-rbac_db}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./backend/postgres-init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-commtel} -d ${DB_NAME:-rbac_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+  identity-service:
+    image: node:20-alpine
+    working_dir: /app
+    # openssl is needed by Prisma's query engine on alpine; migrate deploy
+    # applies any pending migrations before the dev server starts, same as
+    # the production Dockerfile's CMD.
+    command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
+    volumes:
+      - ./backend/services/identity-service:/app
+      - identity_dev_node_modules:/app/node_modules
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: ${DB_NAME:-rbac_db}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required, copy .env.example to .env and set it}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4000:4000"
+
+  incident-service:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
+    volumes:
+      - ./backend/services/incident-service:/app
+      - incident_dev_node_modules:/app/node_modules
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_started
+    environment:
+      PORT: 4200
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: incident_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4200:4200"
+
+  # No healthcheck on the two services above (a bare node:20-alpine image has
+  # no wget/curl without an extra apk add), so downstream depends_on here use
+  # service_started, not service_healthy — identity-service/incident-service
+  # take a few seconds after container start (npm ci + prisma generate +
+  # migrate deploy) before they're actually accepting requests. The gateway
+  # and frontend handle this fine (a request that arrives too early just
+  # fails once and you retry in the browser); nothing crash-loops over it.
+  api-gateway:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev:polling"
+    volumes:
+      - ./backend/api-gateway:/app
+      - gateway_dev_node_modules:/app/node_modules
+    restart: unless-stopped
+    depends_on:
+      - identity-service
+      - incident-service
+    environment:
+      PORT: 8000
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      INCIDENT_SERVICE_URL: http://incident-service:4200
+    ports:
+      - "8090:8000"
+
+  notification-service:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev:polling"
+    volumes:
+      - ./backend/services/notification-service:/app
+      - notification_dev_node_modules:/app/node_modules
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      PORT: 4100
+      NODE_ENV: development
+      RABBITMQ_URL: amqp://rabbitmq:5672
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: "${SMTP_FROM:-RBAC Console <noreply@rbac.local>}"
+    ports:
+      - "4100:4100"
+
+  # Vite dev server instead of the production nginx-served static build —
+  # --host is required so the dev server accepts connections from outside
+  # the container (Vite binds localhost-only by default).
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    volumes:
+      - ./frontend:/app
+      - frontend_dev_node_modules:/app/node_modules
+    restart: unless-stopped
+    depends_on:
+      - api-gateway
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8090/api}
+      VITE_USE_POLLING: "true"
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres_dev_data:
+  identity_dev_node_modules:
+  incident_dev_node_modules:
+  gateway_dev_node_modules:
+  notification_dev_node_modules:
+  frontend_dev_node_modules:
