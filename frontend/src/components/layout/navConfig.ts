@@ -1,5 +1,15 @@
 import type { LucideIcon } from 'lucide-react'
-import { KeyRound, LayoutDashboard, LayoutGrid, Network, ScrollText, ShieldCheck, Users, Zap } from 'lucide-react'
+import {
+  KeyRound,
+  LayoutDashboard,
+  LayoutGrid,
+  Network,
+  ScrollText,
+  ShieldAlert,
+  ShieldCheck,
+  Users,
+  Zap,
+} from 'lucide-react'
 import { useMyEnabledModuleNames } from '@/hooks/useMyModules'
 
 export interface NavItem {
@@ -10,6 +20,7 @@ export interface NavItem {
 
 // Dashboard is always shown — it isn't backed by a module permission.
 const MODULE_GATED_ITEMS: { moduleName: string; item: NavItem }[] = [
+  { moduleName: 'Incidents', item: { to: '/incidents', label: 'Incidents', icon: ShieldAlert } },
   { moduleName: 'Users', item: { to: '/users', label: 'Users', icon: Users } },
   { moduleName: 'Departments', item: { to: '/departments', label: 'Departments', icon: Network } },
   { moduleName: 'Roles', item: { to: '/roles', label: 'Roles', icon: ShieldCheck } },

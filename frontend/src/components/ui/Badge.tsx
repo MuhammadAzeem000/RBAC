@@ -42,3 +42,39 @@ export function StatusBadge({ isActive }: { isActive: boolean }) {
     </Badge>
   )
 }
+
+const SEVERITY_TONE: Record<string, Tone> = { low: 'slate', medium: 'amber', high: 'red', critical: 'red' }
+const SEVERITY_LABEL: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' }
+
+// Severity/status are also spelled out as text (not color alone) per the
+// SOAR MVP spec's "must be scannable without relying on color alone" rule.
+export function SeverityBadge({ severity }: { severity: string }) {
+  return (
+    <Badge tone={SEVERITY_TONE[severity] ?? 'slate'} className={severity === 'critical' ? 'font-semibold' : undefined}>
+      {SEVERITY_LABEL[severity] ?? severity}
+    </Badge>
+  )
+}
+
+const INCIDENT_STATUS_TONE: Record<string, Tone> = {
+  new: 'blue',
+  triage: 'amber',
+  investigating: 'amber',
+  containment: 'amber',
+  remediation: 'amber',
+  resolved: 'green',
+  closed: 'slate',
+}
+const INCIDENT_STATUS_LABEL: Record<string, string> = {
+  new: 'New',
+  triage: 'Triage',
+  investigating: 'Investigating',
+  containment: 'Containment',
+  remediation: 'Remediation',
+  resolved: 'Resolved',
+  closed: 'Closed',
+}
+
+export function IncidentStatusBadge({ status }: { status: string }) {
+  return <Badge tone={INCIDENT_STATUS_TONE[status] ?? 'slate'}>{INCIDENT_STATUS_LABEL[status] ?? status}</Badge>
+}

@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// The single authoritative audit-log store for the whole platform. Rows are
+// written ONLY by the RabbitMQ consumer (events.consumer.ts), never by a
+// direct HTTP write path — this table is effectively append-only for
+// application users; GET /api/audit-logs is the only route mounted on it.
+//
+// eventId is the idempotency key: every service's outbox assigns it once,
+// before the event is ever published, and the "at-least-once" delivery
+// contract means the SAME eventId can arrive here more than once (broker
+// redelivery after an unacked message, a publisher that re-sends after a
+// crash, etc.) — the unique constraint plus an upsert-with-empty-update in
+// the consumer is what makes duplicate delivery produce exactly one row.
+model AuditLog {
+  id           BigInt @id @default(autoincrement())
+
+  eventId      String @unique @map("event_id") @db.VarChar(36)
+  eventType    String @map("event_type") @db.VarChar(100)
+  service      String @db.VarChar(50)
+
+  actorId      String? @map("actor_id") @db.VarChar(100)
+  actorType    String  @default("USER") @map("actor_type") @db.VarChar(20)
+
+  action       String @db.VarChar(50)
+  resourceType String @map("resource_type") @db.VarChar(50)
+  resourceId   String @map("resource_id") @db.VarChar(100)
+
+  metadata Json? @db.Json
+  payload  Json? @db.Json
+
+  // When the originating service's business transaction actually happened —
+  // distinct from receivedAt, which is when THIS service processed the
+  // event (these can differ by however long the event sat in an outbox or
+  // broker queue during an outage).
+  occurredAt DateTime @map("occurred_at") @db.Timestamp(6)
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamp(6)
+
+  @@index([service])
+  @@index([resourceType, resourceId])
+  @@index([occurredAt])
+  @@index([actorId])
+  @@map("audit_logs")
+}

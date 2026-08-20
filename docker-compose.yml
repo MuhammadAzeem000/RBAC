@@ -1,15 +1,247 @@
-version: "3.9"
-
+# Backend microservices live under backend/services/<name> (each with its own
+# Dockerfile, package.json, and codebase). Add a new microservice by giving
+# it a folder there and a block below, following the same shape as the ones
+# already here — no other structural change should be needed. The one
+# exception is backend/api-gateway/, which sits alongside services/ (not
+# inside it) since it's the entry point in front of all of them, not a peer
+# domain service itself. The frontend only ever talks to api-gateway; it
+# never calls identity-service directly.
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: hello-node:latest
-    container_name: hello-node-prod
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-commtel}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      POSTGRES_DB: ${DB_NAME:-rbac_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Creates incident_db/notification_db/audit_db (each service's own,
+      # separate database) on a FRESH volume only — the official postgres
+      # image only runs docker-entrypoint-initdb.d scripts on first init. An
+      # already-existing volume needs the databases created manually once
+      # (see the script).
+      - ./backend/postgres-init:/docker-entrypoint-initdb.d
+    # Not published to the host on purpose — only backend services need to
+    # reach it, over the compose network by service name. Uncomment to
+    # inspect it directly with a local client (e.g. psql, a GUI tool):
+    # ports:
+    #   - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-commtel} -d ${DB_NAME:-rbac_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Management UI — inspect exchanges/queues/messages at localhost:15672
+      # (guest/guest). AMQP port 5672 itself isn't published: only backend
+      # microservices need it, over the compose network — any future service
+      # that needs to publish/consume events binds to it the same way.
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      # Web inbox — every email notification-service sends lands here
+      # instead of a real mailbox. SMTP port 1025 isn't published: only
+      # notification-service needs it, over the compose network.
+      - "8025:8025"
+
+  # Auth (register/login/refresh/logout/me) plus users, departments, roles,
+  # permissions, modules, actions, audit logs — kept as one service since
+  # they're all relationally coupled through one Postgres schema (foreign
+  # keys everywhere). Publishes domain events (e.g. "user.created") to
+  # RabbitMQ for other services to react to.
+  identity-service:
+    build:
+      context: .
+      dockerfile: backend/services/identity-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
+      PORT: 4000
       NODE_ENV: production
-      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: ${DB_NAME:-rbac_db}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required, copy .env.example to .env and set it}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # SOAR incident management MVP (see SOAR_Incident_Management_MVP.pdf) —
+  # incidents, alerts, tasks, evidence, comments, playbook runs, and
+  # timeline/audit. Owns its own database (incident_db, same Postgres server
+  # as identity-service but a genuinely separate database — no shared
+  # schema). Has no RBAC tables of its own; every request's permissions are
+  # checked by calling identity-service's GET /api/auth/me/modules with the
+  # caller's own access token, which is why it depends on identity-service
+  # being up, not just Postgres/RabbitMQ.
+  incident-service:
+    build:
+      context: .
+      dockerfile: backend/services/incident-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    environment:
+      PORT: 4200
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: incident_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4200:4200"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4200/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Sole authoritative audit-log store. Consumes every service's outbox
+  # events off the "audit.events" exchange and persists them idempotently
+  # (unique eventId). Has no RBAC tables of its own; querying is gated by
+  # calling identity-service's GET /api/auth/me/modules with the caller's
+  # own access token, same as incident-service, which is why it depends on
+  # identity-service being up, not just Postgres/RabbitMQ.
+  audit-service:
+    build:
+      context: .
+      dockerfile: backend/services/audit-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    environment:
+      PORT: 4400
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: audit_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4400:4400"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4400/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Reverse proxy: the single origin the frontend talks to. Routes
+  # "/api/v1/*" (incident-service's documented REST surface) and
+  # "/api/audit-logs*" (audit-service, the single authoritative audit-log
+  # store) to their respective services, and everything else under "/api"
+  # to identity-service.
+  api-gateway:
+    build:
+      context: .
+      dockerfile: backend/api-gateway/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      identity-service:
+        condition: service_healthy
+      incident-service:
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
+    environment:
+      PORT: 8000
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      INCIDENT_SERVICE_URL: http://incident-service:4200
+      AUDIT_SERVICE_URL: http://audit-service:4400
+    ports:
+      - "8090:8000"
+
+  # Consumes domain events off RabbitMQ (currently just "user.created") and
+  # sends the corresponding email. Also owns a small database of its own now
+  # (notification_db) — a Notification row per send attempt plus its outbox
+  # event, written atomically.
+  notification-service:
+    build:
+      context: .
+      dockerfile: backend/services/notification-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      PORT: 4100
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: notification_db
+      RABBITMQ_URL: amqp://rabbitmq:5672
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: "${SMTP_FROM:-RBAC Console <noreply@rbac.local>}"
+    ports:
+      - "4100:4100"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8090/api}
+    restart: unless-stopped
+    depends_on:
+      - api-gateway
+    ports:
+      # Host port 8080 is deliberately avoided — it's a common default for
+      # other local dev stacks (e.g. Apache/XAMPP) and collides easily.
+      - "8081:80"
+
+volumes:
+  postgres_data:

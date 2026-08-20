@@ -27,8 +27,9 @@ export function AuditLogsListPage() {
     return rows.filter(
       (log) =>
         log.action.toLowerCase().includes(q) ||
-        log.targetType.toLowerCase().includes(q) ||
-        log.actorUserId.includes(q),
+        log.resourceType.toLowerCase().includes(q) ||
+        log.service.toLowerCase().includes(q) ||
+        (log.actorId ?? '').includes(q),
     )
   }, [query.data, search])
 
@@ -44,29 +45,43 @@ export function AuditLogsListPage() {
         const log = info.row.original
         return (
           <span className="text-slate-700">
-            {log.targetType}
-            {log.targetId ? ` #${log.targetId}` : ''}
+            {log.resourceType}
+            {log.resourceId ? ` #${log.resourceId}` : ''}
           </span>
         )
       },
     }),
-    columnHelper.accessor('actorUserId', {
+    columnHelper.accessor('actorId', {
       header: 'Actor',
-      cell: (info) => <span className="text-slate-700">User #{info.getValue()}</span>,
+      cell: (info) => {
+        const actorId = info.getValue()
+        const log = info.row.original
+        return (
+          <span className="text-slate-700">
+            {actorId ? `User #${actorId}` : log.actorType}
+          </span>
+        )
+      },
+    }),
+    columnHelper.accessor('service', {
+      header: 'Service',
+      cell: (info) => <span className="text-xs text-slate-500">{info.getValue()}</span>,
     }),
     columnHelper.display({
       id: 'metadata',
       header: 'Details',
-      cell: (info) =>
-        info.row.original.metadata ? (
+      cell: (info) => {
+        const details = info.row.original.metadata ?? info.row.original.payload
+        return details ? (
           <span className="block max-w-64 truncate font-mono text-xs text-slate-400">
-            {JSON.stringify(info.row.original.metadata)}
+            {JSON.stringify(details)}
           </span>
         ) : (
           <span className="text-slate-300">—</span>
-        ),
+        )
+      },
     }),
-    columnHelper.accessor('createdAt', {
+    columnHelper.accessor('occurredAt', {
       header: 'When',
       cell: (info) => (
         <span className="whitespace-nowrap text-xs text-slate-500">

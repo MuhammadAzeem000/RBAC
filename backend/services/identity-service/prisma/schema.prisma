@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id BigInt @id @default(autoincrement())
+
+  name         String  @db.VarChar(150)
+  email        String  @db.VarChar(255)
+  passwordHash String? @map("password_hash") @db.VarChar(255)
+
+  avatarUrl    String? @map("avatar_url") @db.VarChar(500)
+
+  status          String    @default("active") @db.VarChar(30)
+  isActive        Boolean   @default(true) @map("is_active")
+
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamp(6)
+  lastLoginIp String?   @map("last_login_ip") @db.VarChar(45)
+
+  metadata Json? @db.Json
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  userRoles       UserRole[]
+  userDepartments UserDepartment[]
+
+  @@unique([email])
+  @@index([status])
+  @@map("users")
+}
+
+model Department {
+  id BigInt @id @default(autoincrement())
+
+  name        String  @db.VarChar(150)
+  description String? @db.Text
+
+  status   String  @default("active") @db.VarChar(30)
+  isActive Boolean @default(true) @map("is_active")
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  metadata Json? @db.Json
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  userDepartments UserDepartment[]
+
+  @@unique([name])
+  @@map("departments")
+}
+
+model Role {
+  id BigInt @id @default(autoincrement())
+
+  name        String  @db.VarChar(100)
+  description String? @db.Text
+
+  isSystem  Boolean @default(false) @map("is_system")
+  isActive  Boolean @default(true) @map("is_active")
+
+  metadata Json? @db.Json
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@unique([name])
+  @@index([isActive])
+  @@map("roles")
+}
+
+model Module {
+  id BigInt @id @default(autoincrement())
+
+  name        String  @db.VarChar(100)
+  description String? @db.Text
+
+  icon      String? @db.VarChar(100)
+  route     String? @db.VarChar(255)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  isSystem       Boolean @default(false) @map("is_system")
+  isActive       Boolean @default(true) @map("is_active")
+
+  metadata Json? @db.Json
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  permissions Permission[]
+
+  @@index([isActive])
+  @@map("modules")
+}
+
+model Action {
+  id BigInt @id @default(autoincrement())
+
+  name        String  @db.VarChar(100)
+  description String? @db.Text
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  metadata Json? @db.Json
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  permissions Permission[]
+
+  @@index([isActive])
+  @@map("actions")
+}
+
+model Permission {
+  id BigInt @id @default(autoincrement())
+
+  moduleId BigInt @map("module_id")
+  actionId BigInt @map("action_id")
+
+  name        String  @db.VarChar(150)
+  description String? @db.Text
+
+  isActive Boolean @default(true) @map("is_active")
+
+  metadata Json? @db.Json
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  module Module @relation(fields: [moduleId], references: [id])
+  action Action @relation(fields: [actionId], references: [id])
+
+  rolePermissions RolePermission[]
+
+  @@unique([moduleId, actionId])
+  @@index([moduleId])
+  @@index([actionId])
+  @@index([isActive])
+  @@map("permissions")
+}
+
+model UserRole {
+  userId BigInt @map("user_id")
+  roleId BigInt @map("role_id")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  createdBy BigInt?  @map("created_by")
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model UserDepartment {
+  userId       BigInt @map("user_id")
+  departmentId BigInt @map("department_id")
+
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  createdBy BigInt?  @map("created_by")
+
+  user       User       @relation(fields: [userId], references: [id])
+  department Department @relation(fields: [departmentId], references: [id])
+
+  @@id([userId, departmentId])
+  @@index([userId])
+  @@index([departmentId])
+  @@map("user_departments")
+}
+
+model RolePermission {
+  roleId       BigInt @map("role_id")
+  permissionId BigInt @map("permission_id")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  createdBy BigInt?  @map("created_by")
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// Transactional outbox: every auditable mutation inserts a row here in the
+// SAME database transaction as its business write, so the two can never
+// diverge (a rolled-back business transaction rolls this back too). A
+// separate publisher worker (outboxPublisher.service.ts) polls unpublished
+// rows and delivers them to the "audit.events" exchange — nothing here ever
+// calls audit-service directly or synchronously.
+model OutboxEvent {
+  id BigInt @id @default(autoincrement())
+
+  eventId       String  @unique @map("event_id") @db.VarChar(36)
+  eventType     String  @map("event_type") @db.VarChar(100)
+  aggregateType String  @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String  @map("aggregate_id") @db.VarChar(100)
+
+  actorId   String? @map("actor_id") @db.VarChar(100)
+  actorType String  @default("USER") @map("actor_type") @db.VarChar(20)
+
+  action       String @db.VarChar(50)
+  resourceType String @map("resource_type") @db.VarChar(50)
+  resourceId   String @map("resource_id") @db.VarChar(100)
+
+  metadata Json? @db.Json
+  payload  Json? @db.Json
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamp(6)
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error") @db.Text
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}
