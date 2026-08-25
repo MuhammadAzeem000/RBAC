@@ -30,7 +30,7 @@ export function LoginPage() {
           <span className="flex size-10 items-center justify-center rounded-lg bg-blue-600 text-white">
             <ShieldHalf className="size-5" aria-hidden="true" />
           </span>
-          <h1 className="text-base font-semibold text-slate-900">RBAC Console</h1>
+          <h1 className="text-base font-semibold text-slate-900">SOAR Console</h1>
           <p className="text-xs text-slate-500">Sign in to manage access</p>
         </div>
 

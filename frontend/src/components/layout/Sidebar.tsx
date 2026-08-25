@@ -14,7 +14,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
     <div className="flex h-full w-60 flex-col border-r border-slate-200 bg-white">
       <div className="flex h-12 items-center gap-2 border-b border-slate-200 px-4">
         <ShieldHalf className="size-5 text-blue-600" aria-hidden="true" />
-        <span className="text-sm font-semibold text-slate-900">RBAC Console</span>
+        <span className="text-sm font-semibold text-slate-900">SOAR Console</span>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3" aria-label="Primary">
         {navItems.map((item) => (

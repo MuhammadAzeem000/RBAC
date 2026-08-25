@@ -214,7 +214,7 @@ services:
       RABBITMQ_URL: amqp://rabbitmq:5672
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
-      SMTP_FROM: "${SMTP_FROM:-RBAC Console <noreply@rbac.local>}"
+      SMTP_FROM: "${SMTP_FROM:-SOAR Console <noreply@rbac.local>}"
     ports:
       - "4100:4100"
 
