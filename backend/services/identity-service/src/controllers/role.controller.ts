@@ -46,6 +46,7 @@ export async function createRole(req: Request, res: Response) {
   const role = await prisma.$transaction(async (tx) => {
     const created = await roleService.createRole(result.data, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "ROLE_CREATED",
       aggregateType: "ROLE",
       aggregateId: created.id.toString(),
@@ -70,7 +71,13 @@ export async function updateRole(req: Request, res: Response) {
     return;
   }
 
-  if (result.data.isActive !== undefined && (await userRoleService.isRoleAssignedToUser(req.auth!.userId, id))) {
+  // Raw prisma, not req.db: Role isn't tenant-scoped, and this specific
+  // lookup is already filtered by req.auth.userId, which alone pins it to
+  // exactly one tenant — no unscoped-leak risk.
+  if (
+    result.data.isActive !== undefined &&
+    (await userRoleService.isRoleAssignedToUser(prisma, req.auth!.userId, id))
+  ) {
     res.status(409).json({ error: "You can't change the active status of a role assigned to your own account" });
     return;
   }
@@ -78,6 +85,7 @@ export async function updateRole(req: Request, res: Response) {
   const role = await prisma.$transaction(async (tx) => {
     const updated = await roleService.updateRole(id, result.data, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "ROLE_UPDATED",
       aggregateType: "ROLE",
       aggregateId: updated.id.toString(),
@@ -96,7 +104,7 @@ export async function deleteRole(req: Request, res: Response) {
   const id = parseId(req, res);
   if (id === null) return;
 
-  if (await userRoleService.isRoleAssignedToUser(req.auth!.userId, id)) {
+  if (await userRoleService.isRoleAssignedToUser(prisma, req.auth!.userId, id)) {
     res.status(409).json({ error: "You can't delete a role assigned to your own account" });
     return;
   }
@@ -109,6 +117,7 @@ export async function deleteRole(req: Request, res: Response) {
   await prisma.$transaction(async (tx) => {
     await roleService.deleteRole(id, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "ROLE_DELETED",
       aggregateType: "ROLE",
       aggregateId: id.toString(),

@@ -21,6 +21,8 @@ datasource db {
 model AuditLog {
   id           BigInt @id @default(autoincrement())
 
+  tenantId     BigInt @map("tenant_id")
+
   eventId      String @unique @map("event_id") @db.VarChar(36)
   eventType    String @map("event_type") @db.VarChar(100)
   service      String @db.VarChar(50)
@@ -42,6 +44,7 @@ model AuditLog {
   occurredAt DateTime @map("occurred_at") @db.Timestamp(6)
   receivedAt DateTime @default(now()) @map("received_at") @db.Timestamp(6)
 
+  @@index([tenantId])
   @@index([service])
   @@index([resourceType, resourceId])
   @@index([occurredAt])

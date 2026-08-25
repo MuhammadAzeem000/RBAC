@@ -8,6 +8,7 @@ import { writeOutboxEvent } from "../services/outbox.service";
 
 const userCreatedEventSchema = z.object({
   userId: z.string(),
+  tenantId: z.string(),
   name: z.string(),
   email: z.string().email(),
 });
@@ -45,6 +46,7 @@ export async function startConsumer(): Promise<void> {
 
 export async function handleMessage(content: Buffer): Promise<void> {
   const parsed = userCreatedEventSchema.parse(JSON.parse(content.toString("utf-8")));
+  const tenantId = BigInt(parsed.tenantId);
   const { subject, html, text } = userWelcomeEmail({ name: parsed.name, email: parsed.email });
 
   let status: "sent" | "failed" = "sent";
@@ -65,6 +67,7 @@ export async function handleMessage(content: Buffer): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const notification = await tx.notification.create({
       data: {
+        tenantId,
         recipientEmail: parsed.email,
         templateKey: "user_welcome",
         status,
@@ -74,6 +77,7 @@ export async function handleMessage(content: Buffer): Promise<void> {
     });
 
     await writeOutboxEvent(tx, {
+      tenantId,
       eventType: status === "sent" ? "NOTIFICATION_SENT" : "NOTIFICATION_FAILED",
       aggregateType: "NOTIFICATION",
       aggregateId: notification.id.toString(),

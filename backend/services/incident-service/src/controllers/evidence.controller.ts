@@ -27,10 +27,10 @@ export async function addEvidence(req: Request, res: Response) {
     return;
   }
 
-  await incidentService.assertIncidentExists(incidentId);
-  const evidence = await evidenceService.addEvidence(incidentId, result.data, req.auth!.userId);
+  await incidentService.assertIncidentExists(req.db, incidentId);
+  const evidence = await evidenceService.addEvidence(req.db, req.auth!.tenantId, incidentId, result.data, req.auth!.userId);
 
-  await recordTimelineEvent({
+  await recordTimelineEvent(req.db, req.auth!.tenantId, {
     incidentId,
     eventType: "evidence_added",
     actorUserId: req.auth!.userId,
@@ -49,7 +49,7 @@ export async function listEvidence(req: Request, res: Response) {
   const incidentId = parseIncidentId(req, res);
   if (incidentId === null) return;
 
-  await incidentService.assertIncidentExists(incidentId);
-  const evidence = await evidenceService.listEvidence(incidentId);
+  await incidentService.assertIncidentExists(req.db, incidentId);
+  const evidence = await evidenceService.listEvidence(req.db, incidentId);
   res.json({ data: evidence });
 }

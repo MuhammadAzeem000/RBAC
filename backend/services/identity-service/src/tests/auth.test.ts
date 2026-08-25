@@ -12,6 +12,7 @@ import { bootstrapFirstAdmin } from "../services/bootstrap.service";
 jest.mock("../config/prisma", () => {
   const resources = {
     user: { findFirst: jest.fn(), update: jest.fn() },
+    tenant: { findFirst: jest.fn(), create: jest.fn() },
   };
   return { prisma: { ...resources, $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(resources)) } };
 });
@@ -25,6 +26,7 @@ jest.mock("../services/outbox.service");
 
 const mockedPrisma = prisma as unknown as {
   user: { findFirst: jest.Mock; update: jest.Mock };
+  tenant: { findFirst: jest.Mock; create: jest.Mock };
 };
 const mockedBcryptCompare = bcrypt.compare as jest.Mock;
 
@@ -36,9 +38,13 @@ function mockRes() {
   return res;
 }
 
-const loginInput = { email: "alice@example.com", password: "supersecret" };
+const loginInput = { tenantSlug: "acme", email: "alice@example.com", password: "supersecret" };
 
 describe("auth.service login", () => {
+  beforeEach(() => {
+    mockedPrisma.tenant.findFirst.mockResolvedValue({ id: 1n, slug: "acme", status: "active" });
+  });
+
   it("returns null when no matching active user is found", async () => {
     mockedPrisma.user.findFirst.mockResolvedValue(null);
 
@@ -47,9 +53,19 @@ describe("auth.service login", () => {
     expect(result).toBeNull();
   });
 
+  it("returns null when the tenant does not exist or is not active", async () => {
+    mockedPrisma.tenant.findFirst.mockResolvedValue(null);
+
+    const result = await authService.login(loginInput, "127.0.0.1");
+
+    expect(result).toBeNull();
+    expect(mockedPrisma.user.findFirst).not.toHaveBeenCalled();
+  });
+
   it("returns null when the password does not match", async () => {
     mockedPrisma.user.findFirst.mockResolvedValue({
       id: 1n,
+      tenantId: 1n,
       email: "alice@example.com",
       isActive: true,
       passwordHash: "hashed",
@@ -65,6 +81,7 @@ describe("auth.service login", () => {
   it("issues tokens and records the login on success", async () => {
     mockedPrisma.user.findFirst.mockResolvedValue({
       id: 1n,
+      tenantId: 1n,
       email: "alice@example.com",
       isActive: true,
       passwordHash: "hashed",
@@ -112,14 +129,19 @@ describe("auth.service getSessionUser", () => {
 });
 
 describe("auth.service register", () => {
-  const registerInput = { name: "Alice Admin", email: "alice@example.com", password: "supersecret" };
+  const registerInput = {
+    name: "Alice Admin",
+    email: "alice@example.com",
+    password: "supersecret",
+    tenantSlug: "acme",
+  };
 
   it("bootstraps the first admin and issues tokens", async () => {
-    (bootstrapFirstAdmin as jest.Mock).mockResolvedValue({ id: 2n, email: "alice@example.com" });
+    (bootstrapFirstAdmin as jest.Mock).mockResolvedValue({ id: 2n, email: "alice@example.com", tenantId: 1n });
 
     const result = await authService.register(registerInput);
 
-    expect(bootstrapFirstAdmin).toHaveBeenCalledWith(registerInput);
+    expect(bootstrapFirstAdmin).toHaveBeenCalledWith({ ...registerInput, tenantName: registerInput.tenantSlug });
     expect(result).not.toBeNull();
     expect(result?.tokens.tokenType).toBe("Bearer");
     expect(result?.user).not.toHaveProperty("passwordHash");
@@ -128,8 +150,16 @@ describe("auth.service register", () => {
     expect(decoded.sub).toBe("2");
   });
 
-  it("returns null when the system is already initialized", async () => {
-    (bootstrapFirstAdmin as jest.Mock).mockRejectedValue(new Error("System already initialized"));
+  it("uses the given tenantName instead of defaulting to the slug", async () => {
+    (bootstrapFirstAdmin as jest.Mock).mockResolvedValue({ id: 2n, email: "alice@example.com", tenantId: 1n });
+
+    await authService.register({ ...registerInput, tenantName: "Acme Corp" });
+
+    expect(bootstrapFirstAdmin).toHaveBeenCalledWith({ ...registerInput, tenantName: "Acme Corp" });
+  });
+
+  it("returns null when the tenant is already initialized", async () => {
+    (bootstrapFirstAdmin as jest.Mock).mockRejectedValue(new Error("Tenant already initialized"));
 
     const result = await authService.register(registerInput);
 
@@ -151,7 +181,7 @@ describe("auth.service refreshAccessToken", () => {
 
   it("issues a fresh access token and echoes the same refresh token", async () => {
     const refreshToken = jwt.sign({ sub: "1", type: "refresh" }, env.JWT_REFRESH_SECRET);
-    mockedPrisma.user.findFirst.mockResolvedValue({ id: 1n, email: "alice@example.com" });
+    mockedPrisma.user.findFirst.mockResolvedValue({ id: 1n, email: "alice@example.com", tenantId: 1n });
 
     const tokens = await authService.refreshAccessToken(refreshToken);
 
@@ -181,6 +211,7 @@ describe("auth.controller", () => {
   });
 
   it("login responds 401 when credentials are rejected", async () => {
+    mockedPrisma.tenant.findFirst.mockResolvedValue({ id: 1n, slug: "acme", status: "active" });
     mockedPrisma.user.findFirst.mockResolvedValue(null);
     const req = { body: loginInput, ip: "127.0.0.1" } as unknown as Request;
     const res = mockRes();
@@ -201,7 +232,7 @@ describe("auth.controller", () => {
 
   it("register responds 400 for invalid input", async () => {
     const req = {
-      body: { name: "Alice", email: "not-an-email", password: "supersecret" },
+      body: { name: "Alice", email: "not-an-email", password: "supersecret", tenantSlug: "acme" },
     } as unknown as Request;
     const res = mockRes();
 
@@ -212,9 +243,9 @@ describe("auth.controller", () => {
   });
 
   it("register responds 201 with tokens on success", async () => {
-    (bootstrapFirstAdmin as jest.Mock).mockResolvedValue({ id: 2n, email: "alice@example.com" });
+    (bootstrapFirstAdmin as jest.Mock).mockResolvedValue({ id: 2n, email: "alice@example.com", tenantId: 1n });
     const req = {
-      body: { name: "Alice", email: "alice@example.com", password: "supersecret" },
+      body: { name: "Alice", email: "alice@example.com", password: "supersecret", tenantSlug: "acme" },
     } as unknown as Request;
     const res = mockRes();
 
@@ -223,10 +254,10 @@ describe("auth.controller", () => {
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
-  it("register responds 409 when the system is already initialized", async () => {
-    (bootstrapFirstAdmin as jest.Mock).mockRejectedValue(new Error("System already initialized"));
+  it("register responds 409 when the tenant is already initialized", async () => {
+    (bootstrapFirstAdmin as jest.Mock).mockRejectedValue(new Error("Tenant already initialized"));
     const req = {
-      body: { name: "Alice", email: "alice@example.com", password: "supersecret" },
+      body: { name: "Alice", email: "alice@example.com", password: "supersecret", tenantSlug: "acme" },
     } as unknown as Request;
     const res = mockRes();
 
@@ -237,7 +268,7 @@ describe("auth.controller", () => {
 
   it("me responds 401 when the user no longer exists", async () => {
     mockedPrisma.user.findFirst.mockResolvedValue(null);
-    const req = { auth: { userId: 1n, email: "alice@example.com" } } as unknown as Request;
+    const req = { auth: { userId: 1n, email: "alice@example.com", tenantId: 1n } } as unknown as Request;
     const res = mockRes();
 
     await authController.me(req, res);
@@ -248,11 +279,12 @@ describe("auth.controller", () => {
   it("me returns the session user", async () => {
     mockedPrisma.user.findFirst.mockResolvedValue({
       id: 6n,
+      tenantId: 1n,
       email: "admin@example.com",
       passwordHash: "hashed",
     });
     const req = {
-      auth: { userId: 6n, email: "admin@example.com" },
+      auth: { userId: 6n, email: "admin@example.com", tenantId: 1n },
     } as unknown as Request;
     const res = mockRes();
 
@@ -291,7 +323,10 @@ describe("authenticate middleware", () => {
   });
 
   it("attaches auth context and calls next for a valid access token", () => {
-    const token = jwt.sign({ sub: "42", email: "alice@example.com", type: "access" }, env.JWT_ACCESS_SECRET);
+    const token = jwt.sign(
+      { sub: "42", email: "alice@example.com", tenantId: "1", type: "access" },
+      env.JWT_ACCESS_SECRET,
+    );
     const req = { headers: { authorization: `Bearer ${token}` } } as unknown as Request;
     const res = mockRes();
     const next = mockNext();
@@ -299,6 +334,6 @@ describe("authenticate middleware", () => {
     authenticate(req, res, next);
 
     expect(next).toHaveBeenCalled();
-    expect(req.auth).toEqual({ userId: 42n, email: "alice@example.com" });
+    expect(req.auth).toEqual({ userId: 42n, email: "alice@example.com", tenantId: 1n });
   });
 });

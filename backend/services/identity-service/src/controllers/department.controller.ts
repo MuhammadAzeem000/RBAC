@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { prisma } from "../config/prisma";
 import { createDepartmentSchema, departmentListQuerySchema, updateDepartmentSchema } from "../interfaces/department";
 import * as departmentService from "../services/department.service";
 import * as outboxService from "../services/outbox.service";
@@ -20,7 +19,7 @@ export async function getDepartments(req: Request, res: Response) {
   const query = parseQuery(departmentListQuerySchema, req, res);
   if (!query) return;
 
-  const result = await departmentService.getDepartments(query);
+  const result = await departmentService.getDepartments(req.db, query);
   res.json(result);
 }
 
@@ -28,7 +27,7 @@ export async function getDepartmentById(req: Request, res: Response) {
   const id = parseId(req, res);
   if (id === null) return;
 
-  const department = await departmentService.getDepartmentById(id);
+  const department = await departmentService.getDepartmentById(req.db, id);
   if (!department) {
     res.status(404).json({ error: "Department not found" });
     return;
@@ -43,9 +42,10 @@ export async function createDepartment(req: Request, res: Response) {
     return;
   }
 
-  const department = await prisma.$transaction(async (tx) => {
-    const created = await departmentService.createDepartment(result.data, tx);
+  const department = await req.db.$transaction(async (tx) => {
+    const created = await departmentService.createDepartment(tx, req.auth!.tenantId, result.data);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "DEPARTMENT_CREATED",
       aggregateType: "DEPARTMENT",
       aggregateId: created.id.toString(),
@@ -72,15 +72,16 @@ export async function updateDepartment(req: Request, res: Response) {
 
   if (
     result.data.isActive !== undefined &&
-    (await userDepartmentService.isDepartmentAssignedToUser(req.auth!.userId, id))
+    (await userDepartmentService.isDepartmentAssignedToUser(req.db, req.auth!.userId, id))
   ) {
     res.status(409).json({ error: "You can't change the active status of a department you belong to" });
     return;
   }
 
-  const department = await prisma.$transaction(async (tx) => {
-    const updated = await departmentService.updateDepartment(id, result.data, tx);
+  const department = await req.db.$transaction(async (tx) => {
+    const updated = await departmentService.updateDepartment(tx, id, result.data);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "DEPARTMENT_UPDATED",
       aggregateType: "DEPARTMENT",
       aggregateId: updated.id.toString(),
@@ -99,21 +100,22 @@ export async function deleteDepartment(req: Request, res: Response) {
   const id = parseId(req, res);
   if (id === null) return;
 
-  if (await userDepartmentService.isDepartmentAssignedToUser(req.auth!.userId, id)) {
+  if (await userDepartmentService.isDepartmentAssignedToUser(req.db, req.auth!.userId, id)) {
     res.status(409).json({ error: "You can't delete a department you belong to" });
     return;
   }
 
-  if (await departmentService.departmentHasUserAssignments(id)) {
+  if (await departmentService.departmentHasUserAssignments(req.db, id)) {
     res.status(409).json({
       error: "This department still has users assigned to it. Remove those assignments before deleting the department.",
     });
     return;
   }
 
-  await prisma.$transaction(async (tx) => {
-    await departmentService.deleteDepartment(id, tx);
+  await req.db.$transaction(async (tx) => {
+    await departmentService.deleteDepartment(tx, id);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "DEPARTMENT_DELETED",
       aggregateType: "DEPARTMENT",
       aggregateId: id.toString(),

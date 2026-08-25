@@ -1,6 +1,7 @@
 import type { User } from './user'
 
 export interface LoginRequest {
+  tenantSlug: string
   email: string
   password: string
 }
@@ -9,6 +10,8 @@ export interface RegisterRequest {
   name: string
   email: string
   password: string
+  tenantSlug: string
+  tenantName?: string
 }
 
 export interface AuthTokens {

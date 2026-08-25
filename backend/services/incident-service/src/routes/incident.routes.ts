@@ -18,7 +18,7 @@ const canUpdate = requireIncidentPermission(ACTION_NAMES.UPDATE);
 const canDelete = requireIncidentPermission(ACTION_NAMES.DELETE);
 
 // Static path registered before "/:id" so it isn't swallowed by the param route.
-incidentRouter.get("/playbook-catalog", canView, playbookRunController.listPlaybookCatalog);
+incidentRouter.get("/playbook-catalog", canView, asyncHandler(playbookRunController.listPlaybookCatalog));
 
 incidentRouter.post("/", canCreate, asyncHandler(incidentController.createIncident));
 incidentRouter.get("/", canView, asyncHandler(incidentController.listIncidents));

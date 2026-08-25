@@ -4,6 +4,11 @@
 // sync with notification-service/src/rabbitmq/topology.ts.
 export const EVENTS_EXCHANGE = "rbac.events";
 export const USER_CREATED_ROUTING_KEY = "user.created";
+// No consumer binds to this yet — published so a future service (e.g.
+// notification-service provisioning a default channel, or incident-service
+// warming a cache) can react without identity-service needing to know about
+// it in advance.
+export const TENANT_CREATED_ROUTING_KEY = "tenant.created";
 
 // Separate exchange for the outbox publisher — audit events are a distinct
 // concern from domain events above (audit MUST NOT be lost; rbac.events

@@ -29,11 +29,15 @@ function mockRes() {
   return res;
 }
 
+function mockDb() {
+  return { $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback({})) };
+}
+
 describe("userRole associations", () => {
   it("responds 404 when the user does not exist", async () => {
     (userService.getUserById as jest.Mock).mockResolvedValue(null);
 
-    const req = { params: { id: "1" }, body: { roleId: "2" } } as unknown as Request;
+    const req = { params: { id: "1" }, body: { roleId: "2" }, db: mockDb() } as unknown as Request;
     const res = mockRes();
 
     await userRoleController.assignRoleToUser(req, res);
@@ -50,20 +54,25 @@ describe("userRole associations", () => {
     const req = {
       params: { id: "1" },
       body: { roleId: "2" },
-      auth: { userId: 9n, email: "alice@example.com" },
+      auth: { userId: 9n, email: "alice@example.com", tenantId: 1n },
+      db: mockDb(),
     } as unknown as Request;
     const res = mockRes();
 
     await userRoleController.assignRoleToUser(req, res);
 
-    expect(userRoleService.assignRoleToUser).toHaveBeenCalledWith(1n, 2n, expect.anything());
+    expect(userRoleService.assignRoleToUser).toHaveBeenCalledWith(expect.anything(), 1n, 1n, 2n);
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
   it("responds 404 when revoking an assignment that does not exist", async () => {
     (userRoleService.revokeRoleFromUser as jest.Mock).mockResolvedValue(false);
 
-    const req = { params: { id: "1", roleId: "2" } } as unknown as Request;
+    const req = {
+      params: { id: "1", roleId: "2" },
+      auth: { userId: 9n, email: "alice@example.com", tenantId: 1n },
+      db: mockDb(),
+    } as unknown as Request;
     const res = mockRes();
 
     await userRoleController.revokeRoleFromUser(req, res);
@@ -78,16 +87,16 @@ describe("userRole associations", () => {
       pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
     });
 
-    const req = { params: { id: "1" }, query: {} } as unknown as Request;
+    const req = { params: { id: "1" }, query: {}, db: mockDb() } as unknown as Request;
     const res = mockRes();
 
     await userRoleController.getRolesForUser(req, res);
 
-    expect(userRoleService.getRolesForUser).toHaveBeenCalledWith(1n, { page: 1, pageSize: 20 });
+    expect(userRoleService.getRolesForUser).toHaveBeenCalledWith(expect.anything(), 1n, { page: 1, pageSize: 20 });
   });
 
   it("rejects an invalid pageSize before checking the user exists", async () => {
-    const req = { params: { id: "1" }, query: { pageSize: "1000" } } as unknown as Request;
+    const req = { params: { id: "1" }, query: { pageSize: "1000" }, db: mockDb() } as unknown as Request;
     const res = mockRes();
 
     await userRoleController.getRolesForUser(req, res);

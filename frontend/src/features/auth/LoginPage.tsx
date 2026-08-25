@@ -9,6 +9,12 @@ import { Input } from '@/components/ui/Input'
 import { useLogin } from '@/hooks/useAuth'
 
 const loginSchema = z.object({
+  tenantSlug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(2, 'Enter your workspace ID')
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lowercase letters, numbers, and dashes only'),
   email: z.string().trim().toLowerCase().email('Enter a valid email'),
   password: z.string().min(1, 'Password is required'),
 })
@@ -39,6 +45,18 @@ export function LoginPage() {
           className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
           noValidate
         >
+          <FormField label="Workspace ID" required error={errors.tenantSlug?.message}>
+            {(id) => (
+              <Input
+                id={id}
+                autoComplete="organization"
+                placeholder="acme-security"
+                invalid={Boolean(errors.tenantSlug)}
+                {...register('tenantSlug')}
+              />
+            )}
+          </FormField>
+
           <FormField label="Email" required error={errors.email?.message}>
             {(id) => (
               <Input
@@ -69,9 +87,9 @@ export function LoginPage() {
           </Button>
 
           <p className="text-center text-xs text-slate-500">
-            Setting up for the first time?{' '}
+            Setting up a new workspace?{' '}
             <Link to="/register" className="font-medium text-blue-600 hover:text-blue-700">
-              Create the admin account
+              Create one
             </Link>
           </p>
         </form>

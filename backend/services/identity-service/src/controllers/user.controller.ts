@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { prisma } from "../config/prisma";
 import { createUserSchema, updateUserSchema, userListQuerySchema } from "../interfaces/user";
 import * as outboxService from "../services/outbox.service";
 import * as userService from "../services/user.service";
@@ -21,7 +20,7 @@ export async function getUsers(req: Request, res: Response) {
   const query = parseQuery(userListQuerySchema, req, res);
   if (!query) return;
 
-  const result = await userService.getUsers(query);
+  const result = await userService.getUsers(req.db, query);
   res.json(result);
 }
 
@@ -29,7 +28,7 @@ export async function getUserById(req: Request, res: Response) {
   const id = parseId(req, res);
   if (id === null) return;
 
-  const user = await userService.getUserById(id);
+  const user = await userService.getUserById(req.db, id);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -44,9 +43,10 @@ export async function createUser(req: Request, res: Response) {
     return;
   }
 
-  const user = await prisma.$transaction(async (tx) => {
-    const created = await userService.createUser(result.data, tx);
+  const user = await req.db.$transaction(async (tx) => {
+    const created = await userService.createUser(tx, req.auth!.tenantId, result.data);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "USER_CREATED",
       aggregateType: "USER",
       aggregateId: created.id.toString(),
@@ -63,6 +63,7 @@ export async function createUser(req: Request, res: Response) {
   // outage can't turn into a failed create-user request.
   void publishEvent(USER_CREATED_ROUTING_KEY, {
     userId: user.id.toString(),
+    tenantId: user.tenantId.toString(),
     name: user.name,
     email: user.email,
   });
@@ -84,9 +85,10 @@ export async function updateUser(req: Request, res: Response) {
     return;
   }
 
-  const user = await prisma.$transaction(async (tx) => {
-    const updated = await userService.updateUser(id, result.data, tx);
+  const user = await req.db.$transaction(async (tx) => {
+    const updated = await userService.updateUser(tx, id, result.data);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "USER_UPDATED",
       aggregateType: "USER",
       aggregateId: updated.id.toString(),
@@ -110,9 +112,10 @@ export async function deleteUser(req: Request, res: Response) {
     return;
   }
 
-  await prisma.$transaction(async (tx) => {
-    await userService.deleteUser(id, tx);
+  await req.db.$transaction(async (tx) => {
+    await userService.deleteUser(tx, id);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "USER_DELETED",
       aggregateType: "USER",
       aggregateId: id.toString(),

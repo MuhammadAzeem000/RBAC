@@ -1,4 +1,3 @@
-import { prisma } from "../config/prisma";
 import { Prisma } from "../generated/prisma/client";
 import { AttachAlertInput } from "../interfaces/alert";
 import { AlertResponse } from "../interfaces/alert-response";
@@ -16,9 +15,18 @@ const alertSelect = {
 
 // Alerts are immutable source context once attached — there is deliberately
 // no update route for this resource, only attach (create) and list.
-export function attachAlert(incidentId: bigint, input: AttachAlertInput, actorUserId: bigint): Promise<AlertResponse> {
-  return prisma.alert.create({
+export function attachAlert(
+  db: Prisma.TransactionClient,
+  tenantId: bigint,
+  incidentId: bigint,
+  input: AttachAlertInput,
+  actorUserId: bigint,
+): Promise<AlertResponse> {
+  return db.alert.create({
     data: {
+      // See incident.service.ts::createIncident for why this is passed
+      // explicitly even though the tenant-scoping extension overwrites it.
+      tenantId,
       incidentId,
       externalAlertId: input.externalAlertId,
       source: input.source,
@@ -30,6 +38,6 @@ export function attachAlert(incidentId: bigint, input: AttachAlertInput, actorUs
   });
 }
 
-export function listAlerts(incidentId: bigint): Promise<AlertResponse[]> {
-  return prisma.alert.findMany({ where: { incidentId }, select: alertSelect, orderBy: { attachedAt: "desc" } });
+export function listAlerts(db: Prisma.TransactionClient, incidentId: bigint): Promise<AlertResponse[]> {
+  return db.alert.findMany({ where: { incidentId }, select: alertSelect, orderBy: { attachedAt: "desc" } });
 }

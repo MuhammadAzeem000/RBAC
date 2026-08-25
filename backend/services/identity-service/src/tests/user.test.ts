@@ -42,7 +42,7 @@ describe("user.service", () => {
     mockedPrisma.user.findMany.mockResolvedValue([{ id: 1n, name: "Alice" }]);
     mockedPrisma.user.count.mockResolvedValue(1);
 
-    const result = await userService.getUsers({ page: 1, pageSize: 20 });
+    const result = await userService.getUsers(mockedPrisma as never, { page: 1, pageSize: 20 });
 
     expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { deletedAt: null }, skip: 0, take: 20 }),
@@ -55,7 +55,7 @@ describe("user.service", () => {
     mockedPrisma.user.findMany.mockResolvedValue([]);
     mockedPrisma.user.count.mockResolvedValue(0);
 
-    await userService.getUsers({ page: 1, pageSize: 20, search: "alice", isActive: false });
+    await userService.getUsers(mockedPrisma as never, { page: 1, pageSize: 20, search: "alice", isActive: false });
 
     expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -75,7 +75,7 @@ describe("user.service", () => {
     mockedPrisma.user.findMany.mockResolvedValue([]);
     mockedPrisma.user.count.mockResolvedValue(45);
 
-    const result = await userService.getUsers({ page: 3, pageSize: 20 });
+    const result = await userService.getUsers(mockedPrisma as never, { page: 3, pageSize: 20 });
 
     expect(mockedPrisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 40, take: 20 }));
     expect(result.pagination.totalPages).toBe(3);
@@ -83,7 +83,7 @@ describe("user.service", () => {
 
   it("getUserById returns null when not found", async () => {
     mockedPrisma.user.findFirst.mockResolvedValue(null);
-    const user = await userService.getUserById(1n);
+    const user = await userService.getUserById(mockedPrisma as never, 1n);
     expect(user).toBeNull();
   });
 
@@ -92,13 +92,14 @@ describe("user.service", () => {
       Promise.resolve({ id: 1n, ...data }),
     );
 
-    await userService.createUser({
+    await userService.createUser(mockedPrisma as never, 1n, {
       name: "Alice",
       email: "alice@example.com",
       password: "supersecret",
     });
 
     const dataArg = mockedPrisma.user.create.mock.calls[0][0].data;
+    expect(dataArg.tenantId).toBe(1n);
     expect(dataArg.email).toBe("alice@example.com");
     expect(dataArg.passwordHash).toBeDefined();
     expect(dataArg.passwordHash).not.toBe("supersecret");
@@ -108,7 +109,7 @@ describe("user.service", () => {
   it("updateUser updates the email directly when provided", async () => {
     mockedPrisma.user.update.mockResolvedValue({ id: 1n });
 
-    await userService.updateUser(1n, { email: "newname@example.com" });
+    await userService.updateUser(mockedPrisma as never, 1n, { email: "newname@example.com" });
 
     expect(mockedPrisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -121,7 +122,7 @@ describe("user.service", () => {
   it("updateUser leaves the email untouched when not provided", async () => {
     mockedPrisma.user.update.mockResolvedValue({ id: 1n });
 
-    await userService.updateUser(1n, { name: "Alice Updated" });
+    await userService.updateUser(mockedPrisma as never, 1n, { name: "Alice Updated" });
 
     expect(mockedPrisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.not.objectContaining({ email: expect.anything() }) }),
@@ -130,7 +131,7 @@ describe("user.service", () => {
 
   it("deleteUser soft-deletes instead of removing the row", async () => {
     mockedPrisma.user.update.mockResolvedValue({ id: 1n });
-    await userService.deleteUser(1n);
+    await userService.deleteUser(mockedPrisma as never, 1n);
     expect(mockedPrisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 1n },
@@ -142,7 +143,7 @@ describe("user.service", () => {
 
 describe("user.controller", () => {
   it("getUserById responds 400 for a non-numeric id", async () => {
-    const req = { params: { id: "abc" } } as unknown as Request;
+    const req = { params: { id: "abc" }, db: mockedPrisma } as unknown as Request;
     const res = mockRes();
 
     await userController.getUserById(req, res);
@@ -153,7 +154,7 @@ describe("user.controller", () => {
 
   it("getUserById responds 404 when the service finds nothing", async () => {
     mockedPrisma.user.findFirst.mockResolvedValue(null);
-    const req = { params: { id: "1" } } as unknown as Request;
+    const req = { params: { id: "1" }, db: mockedPrisma } as unknown as Request;
     const res = mockRes();
 
     await userController.getUserById(req, res);
@@ -162,7 +163,7 @@ describe("user.controller", () => {
   });
 
   it("createUser responds 400 with validation errors for bad input", async () => {
-    const req = { body: { name: "Alice" } } as unknown as Request;
+    const req = { body: { name: "Alice" }, db: mockedPrisma } as unknown as Request;
     const res = mockRes();
 
     await userController.createUser(req, res);
@@ -177,20 +178,25 @@ describe("user.controller", () => {
     );
     const req = {
       body: { name: "Bob", email: "bob@example.com", password: "supersecret" },
-      auth: { userId: 1n, email: "alice@example.com" },
+      auth: { userId: 1n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
     await userController.createUser(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
+    expect(mockedPrisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ tenantId: 1n }) }),
+    );
   });
 
   it("updateUser responds 409 when changing your own active status", async () => {
     const req = {
       params: { id: "1" },
       body: { isActive: false },
-      auth: { userId: 1n, email: "alice@example.com" },
+      auth: { userId: 1n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
@@ -205,7 +211,8 @@ describe("user.controller", () => {
     const req = {
       params: { id: "1" },
       body: { name: "Alice Updated" },
-      auth: { userId: 1n, email: "alice@example.com" },
+      auth: { userId: 1n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
@@ -220,7 +227,8 @@ describe("user.controller", () => {
     const req = {
       params: { id: "2" },
       body: { isActive: false },
-      auth: { userId: 1n, email: "alice@example.com" },
+      auth: { userId: 1n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
@@ -233,7 +241,8 @@ describe("user.controller", () => {
   it("deleteUser responds 409 when deleting your own account", async () => {
     const req = {
       params: { id: "1" },
-      auth: { userId: 1n, email: "alice@example.com" },
+      auth: { userId: 1n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
@@ -247,7 +256,8 @@ describe("user.controller", () => {
     mockedPrisma.user.update.mockResolvedValue({ id: 2n });
     const req = {
       params: { id: "2" },
-      auth: { userId: 1n, email: "alice@example.com" },
+      auth: { userId: 1n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 

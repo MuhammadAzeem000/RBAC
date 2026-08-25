@@ -7,8 +7,38 @@ datasource db {
   provider = "postgresql"
 }
 
+// Every business user, department, and role assignment belongs to exactly
+// one Tenant. Platform Operator accounts still carry a (home) tenantId like
+// everyone else — their cross-tenant access is a role-based exemption
+// applied by the tenant-scoping helper (@responderx/shared), not a null
+// tenant on the row. Role/Module/Action/Permission/RolePermission stay
+// global platform taxonomy (see the comment on Role below) and are
+// deliberately NOT tenant-scoped.
+model Tenant {
+  id BigInt @id @default(autoincrement())
+
+  slug String @db.VarChar(63)
+  name String @db.VarChar(150)
+
+  status String @default("active") @db.VarChar(30)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  users           User[]
+  departments     Department[]
+  userRoles       UserRole[]
+  userDepartments UserDepartment[]
+
+  @@unique([slug])
+  @@index([status])
+  @@map("tenants")
+}
+
 model User {
   id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
 
   name         String  @db.VarChar(150)
   email        String  @db.VarChar(255)
@@ -28,16 +58,22 @@ model User {
   updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
 
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
   userRoles       UserRole[]
   userDepartments UserDepartment[]
 
-  @@unique([email])
+  // Email is unique per tenant, not globally — two different tenants may
+  // have a user with the same corporate email colliding only by coincidence.
+  @@unique([tenantId, email])
+  @@index([tenantId])
   @@index([status])
   @@map("users")
 }
 
 model Department {
   id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
 
   name        String  @db.VarChar(150)
   description String? @db.Text
@@ -53,12 +89,22 @@ model Department {
   updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
 
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
   userDepartments UserDepartment[]
 
-  @@unique([name])
+  @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("departments")
 }
 
+// Deliberately NOT tenant-scoped: the MVP plan's role list (Viewer,
+// Analyst, Approver, Playbook Engineer, Tenant Admin, Platform Operator) is a
+// fixed platform taxonomy, seeded once (bootstrap.service.ts /
+// moduleSeed.service.ts), not something a tenant customizes. Same for
+// Module/Action/Permission/RolePermission below — a tenant's users are
+// assigned these global roles via UserRole (which IS tenant-scoped), so
+// cross-tenant leakage isn't possible through this taxonomy even though it
+// carries no tenantId of its own.
 model Role {
   id BigInt @id @default(autoincrement())
 
@@ -159,24 +205,28 @@ model Permission {
 }
 
 model UserRole {
-  userId BigInt @map("user_id")
-  roleId BigInt @map("role_id")
+  userId   BigInt @map("user_id")
+  roleId   BigInt @map("role_id")
+  tenantId BigInt @map("tenant_id")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   createdBy BigInt?  @map("created_by")
 
-  user User @relation(fields: [userId], references: [id])
-  role Role @relation(fields: [roleId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  role   Role   @relation(fields: [roleId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@id([userId, roleId])
   @@index([userId])
   @@index([roleId])
+  @@index([tenantId])
   @@map("user_roles")
 }
 
 model UserDepartment {
   userId       BigInt @map("user_id")
   departmentId BigInt @map("department_id")
+  tenantId     BigInt @map("tenant_id")
 
   isPrimary Boolean  @default(false) @map("is_primary")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
@@ -184,10 +234,12 @@ model UserDepartment {
 
   user       User       @relation(fields: [userId], references: [id])
   department Department @relation(fields: [departmentId], references: [id])
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
 
   @@id([userId, departmentId])
   @@index([userId])
   @@index([departmentId])
+  @@index([tenantId])
   @@map("user_departments")
 }
 
@@ -216,6 +268,8 @@ model RolePermission {
 model OutboxEvent {
   id BigInt @id @default(autoincrement())
 
+  tenantId BigInt @map("tenant_id")
+
   eventId       String  @unique @map("event_id") @db.VarChar(36)
   eventType     String  @map("event_type") @db.VarChar(100)
   aggregateType String  @map("aggregate_type") @db.VarChar(50)
@@ -237,5 +291,6 @@ model OutboxEvent {
   lastError   String?   @map("last_error") @db.Text
 
   @@index([publishedAt])
+  @@index([tenantId])
   @@map("outbox_events")
 }

@@ -23,9 +23,9 @@ export async function createIncident(req: Request, res: Response) {
     return;
   }
 
-  const incident = await incidentService.createIncident(result.data, req.auth!.userId);
+  const incident = await incidentService.createIncident(req.db, req.auth!.tenantId, result.data, req.auth!.userId);
 
-  await recordTimelineEvent({
+  await recordTimelineEvent(req.db, req.auth!.tenantId, {
     incidentId: incident.id,
     eventType: "created",
     actorUserId: req.auth!.userId,
@@ -45,7 +45,7 @@ export async function listIncidents(req: Request, res: Response) {
   const query = parseQuery(listIncidentsQuerySchema, req, res);
   if (!query) return;
 
-  const result = await incidentService.listIncidents(query);
+  const result = await incidentService.listIncidents(req.db, query);
   res.json(result);
 }
 
@@ -53,7 +53,7 @@ export async function getIncidentById(req: Request, res: Response) {
   const id = parseId(req, res);
   if (id === null) return;
 
-  const incident = await incidentService.getIncidentById(id);
+  const incident = await incidentService.getIncidentById(req.db, id);
   if (!incident) {
     res.status(404).json({ error: "Incident not found" });
     return;
@@ -79,10 +79,16 @@ export async function updateIncident(req: Request, res: Response) {
     return;
   }
 
-  const { incident, changes } = await incidentService.updateIncident(id, result.data, req.auth!.userId);
+  const { incident, changes } = await incidentService.updateIncident(
+    req.db,
+    req.auth!.tenantId,
+    id,
+    result.data,
+    req.auth!.userId,
+  );
 
   for (const change of changes) {
-    await recordTimelineEvent({
+    await recordTimelineEvent(req.db, req.auth!.tenantId, {
       incidentId: incident.id,
       eventType: change.type,
       actorUserId: req.auth!.userId,
@@ -110,6 +116,6 @@ export async function deleteIncident(req: Request, res: Response) {
   const id = parseId(req, res);
   if (id === null) return;
 
-  await incidentService.deleteIncident(id, req.auth!.userId);
+  await incidentService.deleteIncident(req.db, req.auth!.tenantId, id, req.auth!.userId);
   res.status(204).send();
 }

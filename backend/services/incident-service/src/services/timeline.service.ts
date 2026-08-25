@@ -1,4 +1,3 @@
-import { prisma } from "../config/prisma";
 import { Prisma } from "../generated/prisma/client";
 import { buildPaginationMeta, PaginatedResult, toSkipTake } from "../interfaces/pagination";
 
@@ -32,9 +31,16 @@ const timelineSelect = {
 
 // Append-only — there is deliberately no update/delete function here. This
 // is the incident's audit trail as well as its UX activity feed.
-export function recordTimelineEvent(input: RecordTimelineEventInput): Promise<TimelineEventEntry> {
-  return prisma.timelineEvent.create({
+export function recordTimelineEvent(
+  db: Prisma.TransactionClient,
+  tenantId: bigint,
+  input: RecordTimelineEventInput,
+): Promise<TimelineEventEntry> {
+  return db.timelineEvent.create({
     data: {
+      // See incident.service.ts::createIncident for why this is passed
+      // explicitly even though the tenant-scoping extension overwrites it.
+      tenantId,
       incidentId: input.incidentId,
       eventType: input.eventType,
       actorUserId: input.actorUserId ?? undefined,
@@ -46,20 +52,21 @@ export function recordTimelineEvent(input: RecordTimelineEventInput): Promise<Ti
 }
 
 export async function getTimeline(
+  db: Prisma.TransactionClient,
   incidentId: bigint,
   params: { page: number; pageSize: number },
 ): Promise<PaginatedResult<TimelineEventEntry>> {
   const { skip, take } = toSkipTake(params.page, params.pageSize);
 
   const [data, total] = await Promise.all([
-    prisma.timelineEvent.findMany({
+    db.timelineEvent.findMany({
       where: { incidentId },
       select: timelineSelect,
       orderBy: { createdAt: "desc" },
       skip,
       take,
     }),
-    prisma.timelineEvent.count({ where: { incidentId } }),
+    db.timelineEvent.count({ where: { incidentId } }),
   ]);
 
   return { data, pagination: buildPaginationMeta(total, params.page, params.pageSize) };

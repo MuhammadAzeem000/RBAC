@@ -73,6 +73,7 @@ export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof
 
 export const NotificationScalarFieldEnum = {
   id: 'id',
+  tenantId: 'tenantId',
   recipientEmail: 'recipientEmail',
   templateKey: 'templateKey',
   status: 'status',
@@ -86,6 +87,7 @@ export type NotificationScalarFieldEnum = (typeof NotificationScalarFieldEnum)[k
 
 export const OutboxEventScalarFieldEnum = {
   id: 'id',
+  tenantId: 'tenantId',
   eventId: 'eventId',
   eventType: 'eventType',
   aggregateType: 'aggregateType',

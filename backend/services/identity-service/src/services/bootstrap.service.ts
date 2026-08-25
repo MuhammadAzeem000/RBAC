@@ -29,29 +29,37 @@ export interface BootstrapFirstAdminInput {
   name: string;
   email: string;
   password: string;
+  tenantSlug: string;
+  tenantName: string;
 }
 
 /**
- * Seeds the module/action taxonomy, one permission per module x action, an
- * "Administrator" role holding all of them, and the first user assigned to
- * that role. Only ever called once — the caller must ensure no user exists
- * yet before invoking this (re-checked here as a race backstop).
+ * Provisions a tenant's first admin: creates the Tenant if its slug doesn't
+ * exist yet, seeds the module/action/permission taxonomy (idempotent, shared
+ * across every tenant), finds-or-creates the single global "Administrator"
+ * role, and creates the caller as that tenant's first User holding it.
+ *
+ * Runs once PER TENANT, not once globally — re-checked here (tenant-scoped,
+ * not a system-wide user count) as a race backstop against two concurrent
+ * first-registrations for the same new tenant.
+ *
+ * The Administrator role is intentionally NOT granted the Tenants module
+ * (see MODULE_NAMES.TENANTS) — that would let any tenant's own admin manage
+ * every OTHER tenant. Platform-level access is granted explicitly, the same
+ * way any other permission is: through the Roles/Permissions UI.
  */
 export async function bootstrapFirstAdmin(input: BootstrapFirstAdminInput): Promise<UserResponse> {
-  // Cheap check outside the transaction so a normal "already initialized"
-  // call fails fast without taking a write transaction at all.
-  if ((await prisma.user.count()) > 0) {
-    throw new Error("System already initialized");
-  }
-
-  const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
-
   return prisma.$transaction(async (tx) => {
-    // Re-checked inside the transaction to close the race between two
-    // concurrent first-registration calls that both passed the check above.
-    if ((await tx.user.count()) > 0) {
-      throw new Error("System already initialized");
+    const tenant =
+      (await tx.tenant.findFirst({ where: { slug: input.tenantSlug } })) ??
+      (await tx.tenant.create({ data: { slug: input.tenantSlug, name: input.tenantName } }));
+
+    const existingUserCount = await tx.user.count({ where: { tenantId: tenant.id } });
+    if (existingUserCount > 0) {
+      throw new Error("Tenant already initialized");
     }
+
+    const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
 
     const modules = await Promise.all(
       MODULES.map(async (moduleSeed) => {
@@ -68,12 +76,9 @@ export async function bootstrapFirstAdmin(input: BootstrapFirstAdminInput): Prom
 
     // find-or-create, not a bare create: ensureModuleSeeded() (see
     // moduleSeed.service.ts) also runs unconditionally on every server boot
-    // to backfill newly-added modules for already-bootstrapped systems, and
-    // on a brand-new database it can race ahead of a concurrent first
-    // registration — a bare create() here would then hit a unique
-    // constraint on [moduleId, actionId] and roll back the whole
-    // transaction, which register() reports as the misleading "already
-    // initialized" error.
+    // to backfill newly-added modules, and could race ahead of a concurrent
+    // first registration for another tenant — a bare create() here would
+    // then hit a unique constraint on [moduleId, actionId] and roll back.
     const permissions = await Promise.all(
       modules.flatMap((module) =>
         actions.map(async (action) => {
@@ -94,22 +99,28 @@ export async function bootstrapFirstAdmin(input: BootstrapFirstAdminInput): Prom
       ),
     );
 
-    const role = await tx.role.create({
-      data: {
-        name: "Administrator",
-        description: "Full access to every module and action.",
-        isSystem: true,
-      },
-    });
+    // Global, shared across every tenant — find-or-create, not a bare
+    // create, since this now runs once per tenant rather than once ever.
+    const role =
+      (await tx.role.findFirst({ where: { name: "Administrator", deletedAt: null } })) ??
+      (await tx.role.create({
+        data: { name: "Administrator", description: "Full access to every module and action.", isSystem: true },
+      }));
 
-    await tx.rolePermission.createMany({
-      data: permissions.map((permission) => ({ roleId: role.id, permissionId: permission.id })),
-    });
+    for (const permission of permissions) {
+      const alreadyGranted = await tx.rolePermission.findFirst({
+        where: { roleId: role.id, permissionId: permission.id },
+      });
+      if (!alreadyGranted) {
+        await tx.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
+      }
+    }
 
     const user = await tx.user.create({
-      data: { name: input.name, email: input.email, passwordHash },
+      data: { tenantId: tenant.id, name: input.name, email: input.email, passwordHash },
       select: {
         id: true,
+        tenantId: true,
         name: true,
         email: true,
         avatarUrl: true,
@@ -122,13 +133,14 @@ export async function bootstrapFirstAdmin(input: BootstrapFirstAdminInput): Prom
       },
     });
 
-    await tx.userRole.create({ data: { userId: user.id, roleId: role.id } });
+    await tx.userRole.create({ data: { userId: user.id, roleId: role.id, tenantId: tenant.id } });
 
     // Bootstrap registration is a genuine account-state-changing/security
     // event (spec: "authentication/security events") — in the same
     // transaction as everything above, so a rollback of the bootstrap (e.g.
     // the race-check above losing to a concurrent call) also rolls this back.
     await writeOutboxEvent(tx, {
+      tenantId: tenant.id,
       eventType: "USER_REGISTERED",
       aggregateType: "USER",
       aggregateId: user.id.toString(),
@@ -136,7 +148,7 @@ export async function bootstrapFirstAdmin(input: BootstrapFirstAdminInput): Prom
       action: "REGISTER",
       resourceType: "USER",
       resourceId: user.id.toString(),
-      payload: { name: user.name, email: user.email },
+      payload: { name: user.name, email: user.email, tenantId: tenant.id.toString() },
     });
 
     return user;

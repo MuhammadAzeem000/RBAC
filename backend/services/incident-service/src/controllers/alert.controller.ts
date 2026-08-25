@@ -27,10 +27,10 @@ export async function attachAlert(req: Request, res: Response) {
     return;
   }
 
-  await incidentService.assertIncidentExists(incidentId);
-  const alert = await alertService.attachAlert(incidentId, result.data, req.auth!.userId);
+  await incidentService.assertIncidentExists(req.db, incidentId);
+  const alert = await alertService.attachAlert(req.db, req.auth!.tenantId, incidentId, result.data, req.auth!.userId);
 
-  await recordTimelineEvent({
+  await recordTimelineEvent(req.db, req.auth!.tenantId, {
     incidentId,
     eventType: "alert_attached",
     actorUserId: req.auth!.userId,
@@ -50,7 +50,7 @@ export async function listAlerts(req: Request, res: Response) {
   const incidentId = parseIncidentId(req, res);
   if (incidentId === null) return;
 
-  await incidentService.assertIncidentExists(incidentId);
-  const alerts = await alertService.listAlerts(incidentId);
+  await incidentService.assertIncidentExists(req.db, incidentId);
+  const alerts = await alertService.listAlerts(req.db, incidentId);
   res.json({ data: alerts });
 }

@@ -25,10 +25,10 @@ export async function createComment(req: Request, res: Response) {
     return;
   }
 
-  await incidentService.assertIncidentExists(incidentId);
-  const comment = await commentService.createComment(incidentId, result.data, req.auth!.userId);
+  await incidentService.assertIncidentExists(req.db, incidentId);
+  const comment = await commentService.createComment(req.db, req.auth!.tenantId, incidentId, result.data, req.auth!.userId);
 
-  await recordTimelineEvent({
+  await recordTimelineEvent(req.db, req.auth!.tenantId, {
     incidentId,
     eventType: "comment_added",
     actorUserId: req.auth!.userId,
@@ -43,7 +43,7 @@ export async function listComments(req: Request, res: Response) {
   const incidentId = parseIncidentId(req, res);
   if (incidentId === null) return;
 
-  await incidentService.assertIncidentExists(incidentId);
-  const comments = await commentService.listComments(incidentId);
+  await incidentService.assertIncidentExists(req.db, incidentId);
+  const comments = await commentService.listComments(req.db, incidentId);
   res.json({ data: comments });
 }

@@ -14,7 +14,7 @@ export async function getTimeline(req: Request, res: Response) {
   const query = parseQuery(paginationQuerySchema, req, res);
   if (!query) return;
 
-  await incidentService.assertIncidentExists(incidentId);
-  const result = await timelineService.getTimeline(incidentId, query);
+  await incidentService.assertIncidentExists(req.db, incidentId);
+  const result = await timelineService.getTimeline(req.db, incidentId, query);
   res.json(result);
 }

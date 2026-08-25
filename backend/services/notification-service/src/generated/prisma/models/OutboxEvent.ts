@@ -28,16 +28,19 @@ export type AggregateOutboxEvent = {
 
 export type OutboxEventAvgAggregateOutputType = {
   id: number | null
+  tenantId: number | null
   attempts: number | null
 }
 
 export type OutboxEventSumAggregateOutputType = {
   id: bigint | null
+  tenantId: bigint | null
   attempts: number | null
 }
 
 export type OutboxEventMinAggregateOutputType = {
   id: bigint | null
+  tenantId: bigint | null
   eventId: string | null
   eventType: string | null
   aggregateType: string | null
@@ -55,6 +58,7 @@ export type OutboxEventMinAggregateOutputType = {
 
 export type OutboxEventMaxAggregateOutputType = {
   id: bigint | null
+  tenantId: bigint | null
   eventId: string | null
   eventType: string | null
   aggregateType: string | null
@@ -72,6 +76,7 @@ export type OutboxEventMaxAggregateOutputType = {
 
 export type OutboxEventCountAggregateOutputType = {
   id: number
+  tenantId: number
   eventId: number
   eventType: number
   aggregateType: number
@@ -93,16 +98,19 @@ export type OutboxEventCountAggregateOutputType = {
 
 export type OutboxEventAvgAggregateInputType = {
   id?: true
+  tenantId?: true
   attempts?: true
 }
 
 export type OutboxEventSumAggregateInputType = {
   id?: true
+  tenantId?: true
   attempts?: true
 }
 
 export type OutboxEventMinAggregateInputType = {
   id?: true
+  tenantId?: true
   eventId?: true
   eventType?: true
   aggregateType?: true
@@ -120,6 +128,7 @@ export type OutboxEventMinAggregateInputType = {
 
 export type OutboxEventMaxAggregateInputType = {
   id?: true
+  tenantId?: true
   eventId?: true
   eventType?: true
   aggregateType?: true
@@ -137,6 +146,7 @@ export type OutboxEventMaxAggregateInputType = {
 
 export type OutboxEventCountAggregateInputType = {
   id?: true
+  tenantId?: true
   eventId?: true
   eventType?: true
   aggregateType?: true
@@ -243,6 +253,7 @@ export type OutboxEventGroupByArgs<ExtArgs extends runtime.Types.Extensions.Inte
 
 export type OutboxEventGroupByOutputType = {
   id: bigint
+  tenantId: bigint
   eventId: string
   eventType: string
   aggregateType: string
@@ -285,6 +296,7 @@ export type OutboxEventWhereInput = {
   OR?: Prisma.OutboxEventWhereInput[]
   NOT?: Prisma.OutboxEventWhereInput | Prisma.OutboxEventWhereInput[]
   id?: Prisma.BigIntFilter<"OutboxEvent"> | bigint | number
+  tenantId?: Prisma.BigIntFilter<"OutboxEvent"> | bigint | number
   eventId?: Prisma.StringFilter<"OutboxEvent"> | string
   eventType?: Prisma.StringFilter<"OutboxEvent"> | string
   aggregateType?: Prisma.StringFilter<"OutboxEvent"> | string
@@ -304,6 +316,7 @@ export type OutboxEventWhereInput = {
 
 export type OutboxEventOrderByWithRelationInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   eventId?: Prisma.SortOrder
   eventType?: Prisma.SortOrder
   aggregateType?: Prisma.SortOrder
@@ -327,6 +340,7 @@ export type OutboxEventWhereUniqueInput = Prisma.AtLeast<{
   AND?: Prisma.OutboxEventWhereInput | Prisma.OutboxEventWhereInput[]
   OR?: Prisma.OutboxEventWhereInput[]
   NOT?: Prisma.OutboxEventWhereInput | Prisma.OutboxEventWhereInput[]
+  tenantId?: Prisma.BigIntFilter<"OutboxEvent"> | bigint | number
   eventType?: Prisma.StringFilter<"OutboxEvent"> | string
   aggregateType?: Prisma.StringFilter<"OutboxEvent"> | string
   aggregateId?: Prisma.StringFilter<"OutboxEvent"> | string
@@ -345,6 +359,7 @@ export type OutboxEventWhereUniqueInput = Prisma.AtLeast<{
 
 export type OutboxEventOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   eventId?: Prisma.SortOrder
   eventType?: Prisma.SortOrder
   aggregateType?: Prisma.SortOrder
@@ -372,6 +387,7 @@ export type OutboxEventScalarWhereWithAggregatesInput = {
   OR?: Prisma.OutboxEventScalarWhereWithAggregatesInput[]
   NOT?: Prisma.OutboxEventScalarWhereWithAggregatesInput | Prisma.OutboxEventScalarWhereWithAggregatesInput[]
   id?: Prisma.BigIntWithAggregatesFilter<"OutboxEvent"> | bigint | number
+  tenantId?: Prisma.BigIntWithAggregatesFilter<"OutboxEvent"> | bigint | number
   eventId?: Prisma.StringWithAggregatesFilter<"OutboxEvent"> | string
   eventType?: Prisma.StringWithAggregatesFilter<"OutboxEvent"> | string
   aggregateType?: Prisma.StringWithAggregatesFilter<"OutboxEvent"> | string
@@ -391,6 +407,7 @@ export type OutboxEventScalarWhereWithAggregatesInput = {
 
 export type OutboxEventCreateInput = {
   id?: bigint | number
+  tenantId: bigint | number
   eventId: string
   eventType: string
   aggregateType: string
@@ -410,6 +427,7 @@ export type OutboxEventCreateInput = {
 
 export type OutboxEventUncheckedCreateInput = {
   id?: bigint | number
+  tenantId: bigint | number
   eventId: string
   eventType: string
   aggregateType: string
@@ -429,6 +447,7 @@ export type OutboxEventUncheckedCreateInput = {
 
 export type OutboxEventUpdateInput = {
   id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  tenantId?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   eventId?: Prisma.StringFieldUpdateOperationsInput | string
   eventType?: Prisma.StringFieldUpdateOperationsInput | string
   aggregateType?: Prisma.StringFieldUpdateOperationsInput | string
@@ -448,6 +467,7 @@ export type OutboxEventUpdateInput = {
 
 export type OutboxEventUncheckedUpdateInput = {
   id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  tenantId?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   eventId?: Prisma.StringFieldUpdateOperationsInput | string
   eventType?: Prisma.StringFieldUpdateOperationsInput | string
   aggregateType?: Prisma.StringFieldUpdateOperationsInput | string
@@ -467,6 +487,7 @@ export type OutboxEventUncheckedUpdateInput = {
 
 export type OutboxEventCreateManyInput = {
   id?: bigint | number
+  tenantId: bigint | number
   eventId: string
   eventType: string
   aggregateType: string
@@ -486,6 +507,7 @@ export type OutboxEventCreateManyInput = {
 
 export type OutboxEventUpdateManyMutationInput = {
   id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  tenantId?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   eventId?: Prisma.StringFieldUpdateOperationsInput | string
   eventType?: Prisma.StringFieldUpdateOperationsInput | string
   aggregateType?: Prisma.StringFieldUpdateOperationsInput | string
@@ -505,6 +527,7 @@ export type OutboxEventUpdateManyMutationInput = {
 
 export type OutboxEventUncheckedUpdateManyInput = {
   id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  tenantId?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   eventId?: Prisma.StringFieldUpdateOperationsInput | string
   eventType?: Prisma.StringFieldUpdateOperationsInput | string
   aggregateType?: Prisma.StringFieldUpdateOperationsInput | string
@@ -524,6 +547,7 @@ export type OutboxEventUncheckedUpdateManyInput = {
 
 export type OutboxEventCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   eventId?: Prisma.SortOrder
   eventType?: Prisma.SortOrder
   aggregateType?: Prisma.SortOrder
@@ -543,11 +567,13 @@ export type OutboxEventCountOrderByAggregateInput = {
 
 export type OutboxEventAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
 }
 
 export type OutboxEventMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   eventId?: Prisma.SortOrder
   eventType?: Prisma.SortOrder
   aggregateType?: Prisma.SortOrder
@@ -565,6 +591,7 @@ export type OutboxEventMaxOrderByAggregateInput = {
 
 export type OutboxEventMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   eventId?: Prisma.SortOrder
   eventType?: Prisma.SortOrder
   aggregateType?: Prisma.SortOrder
@@ -582,6 +609,7 @@ export type OutboxEventMinOrderByAggregateInput = {
 
 export type OutboxEventSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
 }
 
@@ -601,6 +629,7 @@ export type IntFieldUpdateOperationsInput = {
 
 export type OutboxEventSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  tenantId?: boolean
   eventId?: boolean
   eventType?: boolean
   aggregateType?: boolean
@@ -620,6 +649,7 @@ export type OutboxEventSelect<ExtArgs extends runtime.Types.Extensions.InternalA
 
 export type OutboxEventSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  tenantId?: boolean
   eventId?: boolean
   eventType?: boolean
   aggregateType?: boolean
@@ -639,6 +669,7 @@ export type OutboxEventSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
 
 export type OutboxEventSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  tenantId?: boolean
   eventId?: boolean
   eventType?: boolean
   aggregateType?: boolean
@@ -658,6 +689,7 @@ export type OutboxEventSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
 
 export type OutboxEventSelectScalar = {
   id?: boolean
+  tenantId?: boolean
   eventId?: boolean
   eventType?: boolean
   aggregateType?: boolean
@@ -675,13 +707,14 @@ export type OutboxEventSelectScalar = {
   lastError?: boolean
 }
 
-export type OutboxEventOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "eventId" | "eventType" | "aggregateType" | "aggregateId" | "actorId" | "actorType" | "action" | "resourceType" | "resourceId" | "metadata" | "payload" | "createdAt" | "publishedAt" | "attempts" | "lastError", ExtArgs["result"]["outboxEvent"]>
+export type OutboxEventOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "eventId" | "eventType" | "aggregateType" | "aggregateId" | "actorId" | "actorType" | "action" | "resourceType" | "resourceId" | "metadata" | "payload" | "createdAt" | "publishedAt" | "attempts" | "lastError", ExtArgs["result"]["outboxEvent"]>
 
 export type $OutboxEventPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "OutboxEvent"
   objects: {}
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: bigint
+    tenantId: bigint
     eventId: string
     eventType: string
     aggregateType: string
@@ -1121,6 +1154,7 @@ export interface Prisma__OutboxEventClient<T, Null = never, ExtArgs extends runt
  */
 export interface OutboxEventFieldRefs {
   readonly id: Prisma.FieldRef<"OutboxEvent", 'BigInt'>
+  readonly tenantId: Prisma.FieldRef<"OutboxEvent", 'BigInt'>
   readonly eventId: Prisma.FieldRef<"OutboxEvent", 'String'>
   readonly eventType: Prisma.FieldRef<"OutboxEvent", 'String'>
   readonly aggregateType: Prisma.FieldRef<"OutboxEvent", 'String'>

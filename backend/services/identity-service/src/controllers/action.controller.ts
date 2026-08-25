@@ -45,6 +45,7 @@ export async function createAction(req: Request, res: Response) {
   const action = await prisma.$transaction(async (tx) => {
     const created = await actionService.createAction(result.data, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "ACTION_CREATED",
       aggregateType: "ACTION",
       aggregateId: created.id.toString(),
@@ -72,6 +73,7 @@ export async function updateAction(req: Request, res: Response) {
   const action = await prisma.$transaction(async (tx) => {
     const updated = await actionService.updateAction(id, result.data, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "ACTION_UPDATED",
       aggregateType: "ACTION",
       aggregateId: updated.id.toString(),
@@ -100,6 +102,7 @@ export async function deleteAction(req: Request, res: Response) {
   await prisma.$transaction(async (tx) => {
     await actionService.deleteAction(id, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "ACTION_DELETED",
       aggregateType: "ACTION",
       aggregateId: id.toString(),

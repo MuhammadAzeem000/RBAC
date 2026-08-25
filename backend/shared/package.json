@@ -1,0 +1,17 @@
+{
+  "name": "@responderx/shared",
+  "version": "1.0.0",
+  "description": "Canonical domain types and tenant-scoping helpers shared across ResponderX backend services",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import { prisma } from "../config/prisma";
 import { Prisma } from "../generated/prisma/client";
 import { buildPaginationMeta, PaginatedResult, toSkipTake } from "../interfaces/pagination";
 import { CreateUserInput, UpdateUserInput, UserResponse } from "../interfaces/user";
@@ -8,6 +7,7 @@ const SALT_ROUNDS = 10;
 
 const userSelect = {
   id: true,
+  tenantId: true,
   name: true,
   email: true,
   avatarUrl: true,
@@ -19,12 +19,10 @@ const userSelect = {
   updatedAt: true,
 } as const;
 
-export async function getUsers(params: {
-  page: number;
-  pageSize: number;
-  search?: string;
-  isActive?: boolean;
-}): Promise<PaginatedResult<UserResponse>> {
+export async function getUsers(
+  db: Prisma.TransactionClient,
+  params: { page: number; pageSize: number; search?: string; isActive?: boolean },
+): Promise<PaginatedResult<UserResponse>> {
   const where: Prisma.UserWhereInput = {
     deletedAt: null,
     ...(params.isActive !== undefined && { isActive: params.isActive }),
@@ -38,24 +36,26 @@ export async function getUsers(params: {
   const { skip, take } = toSkipTake(params.page, params.pageSize);
 
   const [data, total] = await Promise.all([
-    prisma.user.findMany({ where, select: userSelect, orderBy: { id: "asc" }, skip, take }),
-    prisma.user.count({ where }),
+    db.user.findMany({ where, select: userSelect, orderBy: { id: "asc" }, skip, take }),
+    db.user.count({ where }),
   ]);
 
   return { data, pagination: buildPaginationMeta(total, params.page, params.pageSize) };
 }
 
-export function getUserById(id: bigint): Promise<UserResponse | null> {
-  return prisma.user.findFirst({ where: { id, deletedAt: null }, select: userSelect });
+export function getUserById(db: Prisma.TransactionClient, id: bigint): Promise<UserResponse | null> {
+  return db.user.findFirst({ where: { id, deletedAt: null }, select: userSelect });
 }
 
 export async function createUser(
+  db: Prisma.TransactionClient,
+  tenantId: bigint,
   input: CreateUserInput,
-  tx: Prisma.TransactionClient = prisma,
 ): Promise<UserResponse> {
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
-  return tx.user.create({
+  return db.user.create({
     data: {
+      tenantId,
       name: input.name,
       email: input.email,
       passwordHash,
@@ -64,14 +64,10 @@ export async function createUser(
   });
 }
 
-export async function updateUser(
-  id: bigint,
-  input: UpdateUserInput,
-  tx: Prisma.TransactionClient = prisma,
-): Promise<UserResponse> {
+export async function updateUser(db: Prisma.TransactionClient, id: bigint, input: UpdateUserInput): Promise<UserResponse> {
   const { password, ...rest } = input;
 
-  return tx.user.update({
+  return db.user.update({
     where: { id },
     data: {
       ...rest,
@@ -81,8 +77,8 @@ export async function updateUser(
   });
 }
 
-export function deleteUser(id: bigint, tx: Prisma.TransactionClient = prisma): Promise<UserResponse> {
-  return tx.user.update({
+export function deleteUser(db: Prisma.TransactionClient, id: bigint): Promise<UserResponse> {
+  return db.user.update({
     where: { id },
     data: { deletedAt: new Date(), isActive: false },
     select: userSelect,

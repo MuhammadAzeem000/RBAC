@@ -6,12 +6,14 @@ import { Request, Response } from "express";
 import { actionRouter } from "./routes/action.routes";
 import { authRouter } from "./routes/auth.routes";
 import { departmentRouter } from "./routes/department.routes";
+import { tenantRouter } from "./routes/tenant.routes";
 import { connectEventBus } from "./events/eventBus.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { authenticate } from "./middlewares/authenticate";
+import { tenantContext } from "./middlewares/tenantContext";
 import { MODULE_NAMES } from "./constants/rbac";
 import { moduleRouter } from "./routes/module.routes";
-import { ensureModuleSeeded } from "./services/moduleSeed.service";
+import { ensureModuleSeeded, ensureTenantsModuleSeeded } from "./services/moduleSeed.service";
 import { startOutboxPublisher } from "./services/outboxPublisher.service";
 import { notFound } from "./middlewares/notFound";
 import { permissionRouter } from "./routes/permission.routes";
@@ -35,13 +37,18 @@ app.get("/health", (_req: Request, res: Response) => {
 // Public: login/register/refresh are how a session gets created in the first place.
 app.use("/api/auth", authRouter);
 
-// Everything else requires a valid access token.
-app.use("/api/users", authenticate, userRouter);
-app.use("/api/departments", authenticate, departmentRouter);
+// Everything else requires a valid access token. /users and /departments
+// also get tenantContext — they (and the role/department assignments nested
+// under userRouter) are tenant-scoped models; roles/modules/actions/
+// permissions/tenants are global platform taxonomy and don't need it (see
+// the Role model comment in prisma/schema.prisma).
+app.use("/api/users", authenticate, tenantContext, userRouter);
+app.use("/api/departments", authenticate, tenantContext, departmentRouter);
 app.use("/api/roles", authenticate, roleRouter);
 app.use("/api/modules", authenticate, moduleRouter);
 app.use("/api/actions", authenticate, actionRouter);
 app.use("/api/permissions", authenticate, permissionRouter);
+app.use("/api/tenants", authenticate, tenantRouter);
 // Audit logs are no longer served here — audit-service is now the sole
 // authoritative store (see backend/services/audit-service), reached via the
 // gateway's own "/api/audit-logs" route.
@@ -62,6 +69,12 @@ void connectEventBus();
 // bootstrapped before incident-service existed — safe to run on every boot,
 // idempotent (find-or-create), and cheap. Does not block request handling.
 void ensureModuleSeeded(MODULE_NAMES.INCIDENTS, 8);
+
+// Backfills the Tenants module/permissions the same way, but deliberately
+// does NOT grant them to "Administrator" (see MODULE_NAMES.TENANTS) — nobody
+// can manage tenants until a real platform operator is granted this
+// explicitly through the Roles/Permissions UI.
+void ensureTenantsModuleSeeded();
 
 // Delivers this service's transactional-outbox rows to audit-service — see
 // services/outbox.service.ts (the write side, used inside business

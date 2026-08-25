@@ -58,6 +58,7 @@ export async function assignPermissionToRole(req: Request, res: Response) {
   const assignment = await prisma.$transaction(async (tx) => {
     const created = await rolePermissionService.assignPermissionToRole(roleId, permission.id, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "ROLE_PERMISSION_ASSIGNED",
       aggregateType: "ROLE",
       aggregateId: roleId.toString(),
@@ -84,6 +85,7 @@ export async function revokePermissionFromRole(req: Request, res: Response) {
     const wasRevoked = await rolePermissionService.revokePermissionFromRole(roleId, permissionId, tx);
     if (wasRevoked) {
       await outboxService.writeOutboxEvent(tx, {
+        tenantId: req.auth!.tenantId,
         eventType: "ROLE_PERMISSION_REVOKED",
         aggregateType: "ROLE",
         aggregateId: roleId.toString(),

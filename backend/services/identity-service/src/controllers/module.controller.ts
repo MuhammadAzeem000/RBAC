@@ -45,6 +45,7 @@ export async function createModule(req: Request, res: Response) {
   const module = await prisma.$transaction(async (tx) => {
     const created = await moduleService.createModule(result.data, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "MODULE_CREATED",
       aggregateType: "MODULE",
       aggregateId: created.id.toString(),
@@ -72,6 +73,7 @@ export async function updateModule(req: Request, res: Response) {
   const module = await prisma.$transaction(async (tx) => {
     const updated = await moduleService.updateModule(id, result.data, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "MODULE_UPDATED",
       aggregateType: "MODULE",
       aggregateId: updated.id.toString(),
@@ -100,6 +102,7 @@ export async function deleteModule(req: Request, res: Response) {
   await prisma.$transaction(async (tx) => {
     await moduleService.deleteModule(id, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "MODULE_DELETED",
       aggregateType: "MODULE",
       aggregateId: id.toString(),

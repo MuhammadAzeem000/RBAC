@@ -7,6 +7,6 @@ export async function listAuditLogs(req: Request, res: Response) {
   const query = parseQuery(listAuditLogsQuerySchema, req, res);
   if (!query) return;
 
-  const result = await auditLogService.listAuditLogs(query);
+  const result = await auditLogService.listAuditLogs(req.db, query);
   res.json(result);
 }

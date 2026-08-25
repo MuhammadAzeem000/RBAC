@@ -28,14 +28,17 @@ export type AggregateNotification = {
 
 export type NotificationAvgAggregateOutputType = {
   id: number | null
+  tenantId: number | null
 }
 
 export type NotificationSumAggregateOutputType = {
   id: bigint | null
+  tenantId: bigint | null
 }
 
 export type NotificationMinAggregateOutputType = {
   id: bigint | null
+  tenantId: bigint | null
   recipientEmail: string | null
   templateKey: string | null
   status: string | null
@@ -46,6 +49,7 @@ export type NotificationMinAggregateOutputType = {
 
 export type NotificationMaxAggregateOutputType = {
   id: bigint | null
+  tenantId: bigint | null
   recipientEmail: string | null
   templateKey: string | null
   status: string | null
@@ -56,6 +60,7 @@ export type NotificationMaxAggregateOutputType = {
 
 export type NotificationCountAggregateOutputType = {
   id: number
+  tenantId: number
   recipientEmail: number
   templateKey: number
   status: number
@@ -68,14 +73,17 @@ export type NotificationCountAggregateOutputType = {
 
 export type NotificationAvgAggregateInputType = {
   id?: true
+  tenantId?: true
 }
 
 export type NotificationSumAggregateInputType = {
   id?: true
+  tenantId?: true
 }
 
 export type NotificationMinAggregateInputType = {
   id?: true
+  tenantId?: true
   recipientEmail?: true
   templateKey?: true
   status?: true
@@ -86,6 +94,7 @@ export type NotificationMinAggregateInputType = {
 
 export type NotificationMaxAggregateInputType = {
   id?: true
+  tenantId?: true
   recipientEmail?: true
   templateKey?: true
   status?: true
@@ -96,6 +105,7 @@ export type NotificationMaxAggregateInputType = {
 
 export type NotificationCountAggregateInputType = {
   id?: true
+  tenantId?: true
   recipientEmail?: true
   templateKey?: true
   status?: true
@@ -193,6 +203,7 @@ export type NotificationGroupByArgs<ExtArgs extends runtime.Types.Extensions.Int
 
 export type NotificationGroupByOutputType = {
   id: bigint
+  tenantId: bigint
   recipientEmail: string
   templateKey: string
   status: string
@@ -226,6 +237,7 @@ export type NotificationWhereInput = {
   OR?: Prisma.NotificationWhereInput[]
   NOT?: Prisma.NotificationWhereInput | Prisma.NotificationWhereInput[]
   id?: Prisma.BigIntFilter<"Notification"> | bigint | number
+  tenantId?: Prisma.BigIntFilter<"Notification"> | bigint | number
   recipientEmail?: Prisma.StringFilter<"Notification"> | string
   templateKey?: Prisma.StringFilter<"Notification"> | string
   status?: Prisma.StringFilter<"Notification"> | string
@@ -236,6 +248,7 @@ export type NotificationWhereInput = {
 
 export type NotificationOrderByWithRelationInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   recipientEmail?: Prisma.SortOrder
   templateKey?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -249,6 +262,7 @@ export type NotificationWhereUniqueInput = Prisma.AtLeast<{
   AND?: Prisma.NotificationWhereInput | Prisma.NotificationWhereInput[]
   OR?: Prisma.NotificationWhereInput[]
   NOT?: Prisma.NotificationWhereInput | Prisma.NotificationWhereInput[]
+  tenantId?: Prisma.BigIntFilter<"Notification"> | bigint | number
   recipientEmail?: Prisma.StringFilter<"Notification"> | string
   templateKey?: Prisma.StringFilter<"Notification"> | string
   status?: Prisma.StringFilter<"Notification"> | string
@@ -259,6 +273,7 @@ export type NotificationWhereUniqueInput = Prisma.AtLeast<{
 
 export type NotificationOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   recipientEmail?: Prisma.SortOrder
   templateKey?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -277,6 +292,7 @@ export type NotificationScalarWhereWithAggregatesInput = {
   OR?: Prisma.NotificationScalarWhereWithAggregatesInput[]
   NOT?: Prisma.NotificationScalarWhereWithAggregatesInput | Prisma.NotificationScalarWhereWithAggregatesInput[]
   id?: Prisma.BigIntWithAggregatesFilter<"Notification"> | bigint | number
+  tenantId?: Prisma.BigIntWithAggregatesFilter<"Notification"> | bigint | number
   recipientEmail?: Prisma.StringWithAggregatesFilter<"Notification"> | string
   templateKey?: Prisma.StringWithAggregatesFilter<"Notification"> | string
   status?: Prisma.StringWithAggregatesFilter<"Notification"> | string
@@ -287,6 +303,7 @@ export type NotificationScalarWhereWithAggregatesInput = {
 
 export type NotificationCreateInput = {
   id?: bigint | number
+  tenantId: bigint | number
   recipientEmail: string
   templateKey: string
   status: string
@@ -297,6 +314,7 @@ export type NotificationCreateInput = {
 
 export type NotificationUncheckedCreateInput = {
   id?: bigint | number
+  tenantId: bigint | number
   recipientEmail: string
   templateKey: string
   status: string
@@ -307,6 +325,7 @@ export type NotificationUncheckedCreateInput = {
 
 export type NotificationUpdateInput = {
   id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  tenantId?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   recipientEmail?: Prisma.StringFieldUpdateOperationsInput | string
   templateKey?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -317,6 +336,7 @@ export type NotificationUpdateInput = {
 
 export type NotificationUncheckedUpdateInput = {
   id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  tenantId?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   recipientEmail?: Prisma.StringFieldUpdateOperationsInput | string
   templateKey?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -327,6 +347,7 @@ export type NotificationUncheckedUpdateInput = {
 
 export type NotificationCreateManyInput = {
   id?: bigint | number
+  tenantId: bigint | number
   recipientEmail: string
   templateKey: string
   status: string
@@ -337,6 +358,7 @@ export type NotificationCreateManyInput = {
 
 export type NotificationUpdateManyMutationInput = {
   id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  tenantId?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   recipientEmail?: Prisma.StringFieldUpdateOperationsInput | string
   templateKey?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -347,6 +369,7 @@ export type NotificationUpdateManyMutationInput = {
 
 export type NotificationUncheckedUpdateManyInput = {
   id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  tenantId?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   recipientEmail?: Prisma.StringFieldUpdateOperationsInput | string
   templateKey?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -357,6 +380,7 @@ export type NotificationUncheckedUpdateManyInput = {
 
 export type NotificationCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   recipientEmail?: Prisma.SortOrder
   templateKey?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -367,10 +391,12 @@ export type NotificationCountOrderByAggregateInput = {
 
 export type NotificationAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
 }
 
 export type NotificationMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   recipientEmail?: Prisma.SortOrder
   templateKey?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -381,6 +407,7 @@ export type NotificationMaxOrderByAggregateInput = {
 
 export type NotificationMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
   recipientEmail?: Prisma.SortOrder
   templateKey?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -391,6 +418,7 @@ export type NotificationMinOrderByAggregateInput = {
 
 export type NotificationSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  tenantId?: Prisma.SortOrder
 }
 
 export type BigIntFieldUpdateOperationsInput = {
@@ -417,6 +445,7 @@ export type DateTimeFieldUpdateOperationsInput = {
 
 export type NotificationSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  tenantId?: boolean
   recipientEmail?: boolean
   templateKey?: boolean
   status?: boolean
@@ -427,6 +456,7 @@ export type NotificationSelect<ExtArgs extends runtime.Types.Extensions.Internal
 
 export type NotificationSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  tenantId?: boolean
   recipientEmail?: boolean
   templateKey?: boolean
   status?: boolean
@@ -437,6 +467,7 @@ export type NotificationSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
 
 export type NotificationSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
+  tenantId?: boolean
   recipientEmail?: boolean
   templateKey?: boolean
   status?: boolean
@@ -447,6 +478,7 @@ export type NotificationSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
 
 export type NotificationSelectScalar = {
   id?: boolean
+  tenantId?: boolean
   recipientEmail?: boolean
   templateKey?: boolean
   status?: boolean
@@ -455,13 +487,14 @@ export type NotificationSelectScalar = {
   createdAt?: boolean
 }
 
-export type NotificationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "recipientEmail" | "templateKey" | "status" | "errorMessage" | "relatedUserId" | "createdAt", ExtArgs["result"]["notification"]>
+export type NotificationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "recipientEmail" | "templateKey" | "status" | "errorMessage" | "relatedUserId" | "createdAt", ExtArgs["result"]["notification"]>
 
 export type $NotificationPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Notification"
   objects: {}
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: bigint
+    tenantId: bigint
     recipientEmail: string
     templateKey: string
     status: string
@@ -892,6 +925,7 @@ export interface Prisma__NotificationClient<T, Null = never, ExtArgs extends run
  */
 export interface NotificationFieldRefs {
   readonly id: Prisma.FieldRef<"Notification", 'BigInt'>
+  readonly tenantId: Prisma.FieldRef<"Notification", 'BigInt'>
   readonly recipientEmail: Prisma.FieldRef<"Notification", 'String'>
   readonly templateKey: Prisma.FieldRef<"Notification", 'String'>
   readonly status: Prisma.FieldRef<"Notification", 'String'>

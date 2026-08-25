@@ -9,6 +9,7 @@ import { writeOutboxEvent } from "./outbox.service";
 
 const credentialSelect = {
   id: true,
+  tenantId: true,
   name: true,
   email: true,
   avatarUrl: true,
@@ -25,13 +26,14 @@ function signToken(payload: object, secret: string, expiresIn: string): string {
   return jwt.sign(payload, secret, { expiresIn } as SignOptions);
 }
 
-function signAccessToken(user: { id: bigint; email: string }): {
+function signAccessToken(user: { id: bigint; email: string; tenantId: bigint }): {
   token: string;
   expiresIn: number;
 } {
   const claims: AccessTokenClaims = {
     sub: user.id.toString(),
     email: user.email,
+    tenantId: user.tenantId.toString(),
     type: "access",
   };
   const token = signToken(claims, env.JWT_ACCESS_SECRET, env.JWT_ACCESS_EXPIRES_IN);
@@ -48,7 +50,7 @@ function signRefreshToken(user: { id: bigint }): string {
   return signToken(claims, env.JWT_REFRESH_SECRET, env.JWT_REFRESH_EXPIRES_IN);
 }
 
-function issueTokens(user: { id: bigint; email: string }): AuthTokens {
+function issueTokens(user: { id: bigint; email: string; tenantId: bigint }): AuthTokens {
   const { token: accessToken, expiresIn } = signAccessToken(user);
   const refreshToken = signRefreshToken(user);
   return { accessToken, refreshToken, tokenType: "Bearer", expiresIn };
@@ -58,8 +60,11 @@ export async function login(
   input: LoginInput,
   ip: string | null,
 ): Promise<{ tokens: AuthTokens; user: UserResponse } | null> {
+  const tenant = await prisma.tenant.findFirst({ where: { slug: input.tenantSlug, status: "active" } });
+  if (!tenant) return null;
+
   const user = await prisma.user.findFirst({
-    where: { deletedAt: null, email: input.email },
+    where: { deletedAt: null, tenantId: tenant.id, email: input.email },
     select: credentialSelect,
   });
   if (!user || !user.isActive || !user.passwordHash) return null;
@@ -76,6 +81,7 @@ export async function login(
       data: { lastLoginAt: new Date(), lastLoginIp: ip ?? undefined },
     });
     await writeOutboxEvent(tx, {
+      tenantId: user.tenantId,
       eventType: "USER_LOGIN_SUCCEEDED",
       aggregateType: "USER",
       aggregateId: user.id.toString(),
@@ -92,13 +98,14 @@ export async function login(
   return { tokens, user: safeUser };
 }
 
-// Bootstrap-only: succeeds exactly once, to create the first admin user.
-// Returns null once the system has already been initialized (any user
-// exists), which the controller maps to a 409 Conflict.
+// Bootstrap-only: creates a TENANT'S FIRST admin. Returns null if that
+// tenant already has an admin, which the controller maps to a 409 Conflict.
+// Runs once per tenant, not once globally — a new tenantSlug bootstraps a
+// brand-new tenant; an existing, already-initialized one is rejected.
 export async function register(input: RegisterInput): Promise<{ tokens: AuthTokens; user: UserResponse } | null> {
   let user: UserResponse;
   try {
-    user = await bootstrapFirstAdmin(input);
+    user = await bootstrapFirstAdmin({ ...input, tenantName: input.tenantName ?? input.tenantSlug });
   } catch {
     return null;
   }
@@ -129,7 +136,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<AuthToke
 
   const user = await prisma.user.findFirst({
     where: { id: BigInt(claims.sub), deletedAt: null, isActive: true },
-    select: { id: true, email: true },
+    select: { id: true, email: true, tenantId: true },
   });
   if (!user) return null;
 

@@ -1,4 +1,3 @@
-import { prisma } from "../config/prisma";
 import { Prisma } from "../generated/prisma/client";
 import { buildPaginationMeta, PaginatedResult, toSkipTake } from "../interfaces/pagination";
 
@@ -8,6 +7,7 @@ const departmentSelect = {
 } as const;
 
 export async function getDepartmentsForUser(
+  db: Prisma.TransactionClient,
   userId: bigint,
   params: { page: number; pageSize: number },
 ): Promise<PaginatedResult<{ id: bigint; name: string; isPrimary: boolean; assignedAt: Date }>> {
@@ -15,14 +15,14 @@ export async function getDepartmentsForUser(
   const { skip, take } = toSkipTake(params.page, params.pageSize);
 
   const [rows, total] = await Promise.all([
-    prisma.userDepartment.findMany({
+    db.userDepartment.findMany({
       where,
       include: { department: { select: departmentSelect } },
       orderBy: { createdAt: "asc" },
       skip,
       take,
     }),
-    prisma.userDepartment.count({ where }),
+    db.userDepartment.count({ where }),
   ]);
 
   const data = rows.map((row) => ({ ...row.department, isPrimary: row.isPrimary, assignedAt: row.createdAt }));
@@ -30,28 +30,33 @@ export async function getDepartmentsForUser(
 }
 
 export function assignDepartmentToUser(
+  db: Prisma.TransactionClient,
+  tenantId: bigint,
   userId: bigint,
   departmentId: bigint,
   isPrimary: boolean,
-  tx: Prisma.TransactionClient = prisma,
 ) {
-  return tx.userDepartment.create({
-    data: { userId, departmentId, isPrimary },
+  return db.userDepartment.create({
+    data: { userId, departmentId, isPrimary, tenantId },
     include: { department: { select: departmentSelect } },
   });
 }
 
 export async function revokeDepartmentFromUser(
+  db: Prisma.TransactionClient,
   userId: bigint,
   departmentId: bigint,
-  tx: Prisma.TransactionClient = prisma,
 ): Promise<boolean> {
-  const { count } = await tx.userDepartment.deleteMany({ where: { userId, departmentId } });
+  const { count } = await db.userDepartment.deleteMany({ where: { userId, departmentId } });
   return count > 0;
 }
 
-export async function isDepartmentAssignedToUser(userId: bigint, departmentId: bigint): Promise<boolean> {
-  const assignment = await prisma.userDepartment.findFirst({
+export async function isDepartmentAssignedToUser(
+  db: Prisma.TransactionClient,
+  userId: bigint,
+  departmentId: bigint,
+): Promise<boolean> {
+  const assignment = await db.userDepartment.findFirst({
     where: { userId, departmentId },
     select: { userId: true },
   });

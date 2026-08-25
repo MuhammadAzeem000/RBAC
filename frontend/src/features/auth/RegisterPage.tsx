@@ -10,6 +10,14 @@ import { useRegister } from '@/hooks/useAuth'
 
 const registerSchema = z
   .object({
+    tenantSlug: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .min(2, 'Enter a workspace ID')
+      .max(63)
+      .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lowercase letters, numbers, and dashes only'),
+    tenantName: z.string().trim().max(150).optional(),
     name: z.string().trim().min(1, 'Your name is required').max(150),
     email: z.string().trim().toLowerCase().email('Enter a valid email').max(255),
     password: z.string().min(8, 'At least 8 characters').max(255),
@@ -37,19 +45,43 @@ export function RegisterPage() {
           <span className="flex size-10 items-center justify-center rounded-lg bg-blue-600 text-white">
             <ShieldHalf className="size-5" aria-hidden="true" />
           </span>
-          <h1 className="text-base font-semibold text-slate-900">Create the admin account</h1>
+          <h1 className="text-base font-semibold text-slate-900">Create a workspace</h1>
           <p className="text-xs text-slate-500">
-            Only works once, to set up the very first administrator.
+            Sets up a new workspace and its first administrator.
           </p>
         </div>
 
         <form
           onSubmit={handleSubmit((values) =>
-            register.mutate({ name: values.name, email: values.email, password: values.password }),
+            register.mutate({
+              name: values.name,
+              email: values.email,
+              password: values.password,
+              tenantSlug: values.tenantSlug,
+              tenantName: values.tenantName || undefined,
+            }),
           )}
           className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
           noValidate
         >
+          <FormField label="Workspace ID" required error={errors.tenantSlug?.message}>
+            {(id) => (
+              <Input
+                id={id}
+                autoComplete="organization"
+                placeholder="acme-security"
+                invalid={Boolean(errors.tenantSlug)}
+                {...registerField('tenantSlug')}
+              />
+            )}
+          </FormField>
+
+          <FormField label="Workspace name" error={errors.tenantName?.message}>
+            {(id) => (
+              <Input id={id} placeholder="Acme Security" invalid={Boolean(errors.tenantName)} {...registerField('tenantName')} />
+            )}
+          </FormField>
+
           <FormField label="Full name" required error={errors.name?.message}>
             {(id) => <Input id={id} invalid={Boolean(errors.name)} {...registerField('name')} />}
           </FormField>
@@ -91,11 +123,11 @@ export function RegisterPage() {
           </FormField>
 
           <Button type="submit" variant="primary" size="md" loading={register.isPending} className="mt-1 w-full">
-            Create admin account
+            Create workspace
           </Button>
 
           <p className="text-center text-xs text-slate-500">
-            Already set up?{' '}
+            Already have a workspace?{' '}
             <Link to="/login" className="font-medium text-blue-600 hover:text-blue-700">
               Sign in
             </Link>

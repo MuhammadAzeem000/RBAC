@@ -1,4 +1,4 @@
-import { prisma } from "../config/prisma";
+import { Prisma } from "../generated/prisma/client";
 import { CreateTaskInput, UpdateTaskInput } from "../interfaces/task";
 
 export interface TaskResponse {
@@ -31,9 +31,18 @@ const taskSelect = {
   updatedAt: true,
 } as const;
 
-export function createTask(incidentId: bigint, input: CreateTaskInput, actorUserId: bigint): Promise<TaskResponse> {
-  return prisma.task.create({
+export function createTask(
+  db: Prisma.TransactionClient,
+  tenantId: bigint,
+  incidentId: bigint,
+  input: CreateTaskInput,
+  actorUserId: bigint,
+): Promise<TaskResponse> {
+  return db.task.create({
     data: {
+      // See incident.service.ts::createIncident for why this is passed
+      // explicitly even though the tenant-scoping extension overwrites it.
+      tenantId,
       incidentId,
       title: input.title,
       description: input.description,
@@ -45,22 +54,23 @@ export function createTask(incidentId: bigint, input: CreateTaskInput, actorUser
   });
 }
 
-export function listTasks(incidentId: bigint): Promise<TaskResponse[]> {
-  return prisma.task.findMany({ where: { incidentId }, select: taskSelect, orderBy: { createdAt: "asc" } });
+export function listTasks(db: Prisma.TransactionClient, incidentId: bigint): Promise<TaskResponse[]> {
+  return db.task.findMany({ where: { incidentId }, select: taskSelect, orderBy: { createdAt: "asc" } });
 }
 
-export function getTaskById(incidentId: bigint, taskId: bigint): Promise<TaskResponse | null> {
-  return prisma.task.findFirst({ where: { id: taskId, incidentId }, select: taskSelect });
+export function getTaskById(db: Prisma.TransactionClient, incidentId: bigint, taskId: bigint): Promise<TaskResponse | null> {
+  return db.task.findFirst({ where: { id: taskId, incidentId }, select: taskSelect });
 }
 
 export function updateTask(
+  db: Prisma.TransactionClient,
   incidentId: bigint,
   taskId: bigint,
   input: UpdateTaskInput,
   actorUserId: bigint,
 ): Promise<TaskResponse> {
   const completing = input.status === "completed";
-  return prisma.task.update({
+  return db.task.update({
     where: { id: taskId, incidentId },
     data: {
       ...(input.title !== undefined && { title: input.title }),

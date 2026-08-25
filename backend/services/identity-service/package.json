@@ -8,11 +8,13 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "dev:polling": "nodemon --legacy-watch --exec tsx src/server.ts",
-    "test": "jest"
+    "test": "jest",
+    "test:integration": "jest --config jest.integration.config.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "@responderx/shared": "file:../../shared",
     "amqplib": "^0.10.9",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",

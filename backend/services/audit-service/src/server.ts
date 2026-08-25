@@ -4,6 +4,7 @@ import cors from "cors";
 import express from "express";
 import { Request, Response } from "express";
 import { authenticate } from "./middlewares/authenticate";
+import { tenantContext } from "./middlewares/tenantContext";
 import { connectConsumer } from "./events/consumer";
 import { errorHandler } from "./middlewares/errorHandler";
 import { auditLogRouter } from "./routes/auditLog.routes";
@@ -26,7 +27,7 @@ app.get("/health", (_req: Request, res: Response) => {
 // The single authoritative audit-log store's read API — replaces
 // identity-service's old GET /api/audit-logs (the gateway now routes that
 // path here instead).
-app.use("/api/audit-logs", authenticate, auditLogRouter);
+app.use("/api/audit-logs", authenticate, tenantContext, auditLogRouter);
 
 app.use(notFound);
 app.use(errorHandler);

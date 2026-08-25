@@ -34,10 +34,10 @@ export async function createTask(req: Request, res: Response) {
     return;
   }
 
-  await incidentService.assertIncidentExists(ids.incidentId);
-  const task = await taskService.createTask(ids.incidentId, result.data, req.auth!.userId);
+  await incidentService.assertIncidentExists(req.db, ids.incidentId);
+  const task = await taskService.createTask(req.db, req.auth!.tenantId, ids.incidentId, result.data, req.auth!.userId);
 
-  await recordTimelineEvent({
+  await recordTimelineEvent(req.db, req.auth!.tenantId, {
     incidentId: ids.incidentId,
     eventType: "task_created",
     actorUserId: req.auth!.userId,
@@ -56,8 +56,8 @@ export async function listTasks(req: Request, res: Response) {
   const ids = parseIds(req, res);
   if (!ids) return;
 
-  await incidentService.assertIncidentExists(ids.incidentId);
-  const tasks = await taskService.listTasks(ids.incidentId);
+  await incidentService.assertIncidentExists(req.db, ids.incidentId);
+  const tasks = await taskService.listTasks(req.db, ids.incidentId);
   res.json({ data: tasks });
 }
 
@@ -74,16 +74,16 @@ export async function updateTask(req: Request, res: Response) {
     return;
   }
 
-  const existing = await taskService.getTaskById(ids.incidentId, ids.taskId);
+  const existing = await taskService.getTaskById(req.db, ids.incidentId, ids.taskId);
   if (!existing) {
     res.status(404).json({ error: "Task not found" });
     return;
   }
 
-  const task = await taskService.updateTask(ids.incidentId, ids.taskId, result.data, req.auth!.userId);
+  const task = await taskService.updateTask(req.db, ids.incidentId, ids.taskId, result.data, req.auth!.userId);
 
   const justCompleted = result.data.status === "completed" && existing.status !== "completed";
-  await recordTimelineEvent({
+  await recordTimelineEvent(req.db, req.auth!.tenantId, {
     incidentId: ids.incidentId,
     eventType: justCompleted ? "task_completed" : "task_updated",
     actorUserId: req.auth!.userId,

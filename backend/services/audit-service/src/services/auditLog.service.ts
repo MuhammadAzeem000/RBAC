@@ -29,11 +29,19 @@ const auditLogSelect = {
  * as equally successful outcomes and ack the broker message either way.
  */
 export async function persistIdempotent(event: AuditEventMessage): Promise<{ created: boolean }> {
+  // Every publisher's outbox worker has sent tenantId since Phase 1's
+  // multi-tenancy retrofit — a message missing it is a bug in the sender,
+  // not something to paper over with a silent default.
+  if (!event.tenantId) {
+    throw new Error(`Audit event ${event.eventId} (${event.eventType}) is missing tenantId`);
+  }
+
   let created = true;
 
   await prisma.auditLog.upsert({
     where: { eventId: event.eventId },
     create: {
+      tenantId: BigInt(event.tenantId),
       eventId: event.eventId,
       eventType: event.eventType,
       service: event.service,
@@ -60,7 +68,10 @@ export async function persistIdempotent(event: AuditEventMessage): Promise<{ cre
   return { created };
 }
 
-export async function listAuditLogs(query: ListAuditLogsQuery): Promise<PaginatedResult<AuditLogEntry>> {
+export async function listAuditLogs(
+  db: Prisma.TransactionClient,
+  query: ListAuditLogsQuery,
+): Promise<PaginatedResult<AuditLogEntry>> {
   const where: Prisma.AuditLogWhereInput = {
     ...(query.service && { service: query.service }),
     ...(query.resourceType && { resourceType: query.resourceType }),
@@ -69,8 +80,8 @@ export async function listAuditLogs(query: ListAuditLogsQuery): Promise<Paginate
   const { skip, take } = toSkipTake(query.page, query.pageSize);
 
   const [data, total] = await Promise.all([
-    prisma.auditLog.findMany({ where, select: auditLogSelect, orderBy: { occurredAt: "desc" }, skip, take }),
-    prisma.auditLog.count({ where }),
+    db.auditLog.findMany({ where, select: auditLogSelect, orderBy: { occurredAt: "desc" }, skip, take }),
+    db.auditLog.count({ where }),
   ]);
 
   return { data, pagination: buildPaginationMeta(total, query.page, query.pageSize) };

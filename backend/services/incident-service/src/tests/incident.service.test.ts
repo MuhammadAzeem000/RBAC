@@ -39,7 +39,7 @@ describe("incident.service createIncident", () => {
   it("creates with status 'new' and the caller as creator", async () => {
     mockedPrisma.incident.create.mockResolvedValue({ id: 1n, status: "new" });
 
-    await incidentService.createIncident({ title: "Suspicious login", severity: "high" }, 42n);
+    await incidentService.createIncident(prisma as never, 1n, { title: "Suspicious login", severity: "high" }, 42n);
 
     expect(mockedPrisma.incident.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -53,38 +53,46 @@ describe("incident.service updateIncident", () => {
   it("throws 404 when the incident doesn't exist", async () => {
     mockedPrisma.incident.findFirst.mockResolvedValue(null);
 
-    await expect(incidentService.updateIncident(1n, {}, 1n)).rejects.toMatchObject({ status: 404 });
+    await expect(incidentService.updateIncident(prisma as never, 1n, 1n, {}, 1n)).rejects.toMatchObject({ status: 404 });
   });
 
   it("throws 409 on optimistic concurrency mismatch", async () => {
     mockedPrisma.incident.findFirst.mockResolvedValue(baseIncident({ version: 3 }));
 
-    await expect(incidentService.updateIncident(1n, { version: 2 }, 1n)).rejects.toMatchObject({ status: 409 });
+    await expect(incidentService.updateIncident(prisma as never, 1n, 1n, { version: 2 }, 1n)).rejects.toMatchObject({
+      status: 409,
+    });
   });
 
   it("rejects any edit on a closed incident that isn't an explicit reopen", async () => {
     mockedPrisma.incident.findFirst.mockResolvedValue(baseIncident({ status: "closed" }));
 
-    await expect(incidentService.updateIncident(1n, { title: "New title" }, 1n)).rejects.toThrow(HttpError);
+    await expect(incidentService.updateIncident(prisma as never, 1n, 1n, { title: "New title" }, 1n)).rejects.toThrow(
+      HttpError,
+    );
   });
 
   it("rejects moving status backward", async () => {
     mockedPrisma.incident.findFirst.mockResolvedValue(baseIncident({ status: "containment" }));
 
-    await expect(incidentService.updateIncident(1n, { status: "triage" }, 1n)).rejects.toMatchObject({ status: 400 });
+    await expect(incidentService.updateIncident(prisma as never, 1n, 1n, { status: "triage" }, 1n)).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it("requires closureCode and resolutionSummary to close", async () => {
     mockedPrisma.incident.findFirst.mockResolvedValue(baseIncident({ status: "resolved" }));
 
-    await expect(incidentService.updateIncident(1n, { status: "closed" }, 1n)).rejects.toMatchObject({ status: 400 });
+    await expect(incidentService.updateIncident(prisma as never, 1n, 1n, { status: "closed" }, 1n)).rejects.toMatchObject({
+      status: 400,
+    });
   });
 
   it("allows a valid forward transition and records a status_changed change", async () => {
     mockedPrisma.incident.findFirst.mockResolvedValue(baseIncident({ status: "triage" }));
     mockedPrisma.incident.update.mockResolvedValue(baseIncident({ status: "investigating" }));
 
-    const result = await incidentService.updateIncident(1n, { status: "investigating" }, 1n);
+    const result = await incidentService.updateIncident(prisma as never, 1n, 1n, { status: "investigating" }, 1n);
 
     expect(result.changes).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: "status_changed" })]),
@@ -97,7 +105,13 @@ describe("incident.service updateIncident", () => {
     );
     mockedPrisma.incident.update.mockResolvedValue(baseIncident({ status: "investigating" }));
 
-    const result = await incidentService.updateIncident(1n, { status: "investigating", reopen: true }, 1n);
+    const result = await incidentService.updateIncident(
+      prisma as never,
+      1n,
+      1n,
+      { status: "investigating", reopen: true },
+      1n,
+    );
 
     expect(mockedPrisma.incident.update).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -45,6 +45,7 @@ export async function createPermission(req: Request, res: Response) {
   const permission = await prisma.$transaction(async (tx) => {
     const created = await permissionService.createPermission(result.data, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "PERMISSION_CREATED",
       aggregateType: "PERMISSION",
       aggregateId: created.id.toString(),
@@ -72,6 +73,7 @@ export async function updatePermission(req: Request, res: Response) {
   const permission = await prisma.$transaction(async (tx) => {
     const updated = await permissionService.updatePermission(id, result.data, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "PERMISSION_UPDATED",
       aggregateType: "PERMISSION",
       aggregateId: updated.id.toString(),
@@ -100,6 +102,7 @@ export async function deletePermission(req: Request, res: Response) {
   await prisma.$transaction(async (tx) => {
     await permissionService.deletePermission(id, tx);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "PERMISSION_DELETED",
       aggregateType: "PERMISSION",
       aggregateId: id.toString(),

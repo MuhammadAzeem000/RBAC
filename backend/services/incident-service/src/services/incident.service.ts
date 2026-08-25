@@ -1,4 +1,3 @@
-import { prisma } from "../config/prisma";
 import { Prisma } from "../generated/prisma/client";
 import { HttpError } from "../middlewares/errorHandler";
 import { STATUSES } from "../constants/incidents";
@@ -26,6 +25,7 @@ const STATUS_RANK: Record<string, number> = Object.fromEntries(STATUSES.map((s, 
 
 const incidentSelect = {
   id: true,
+  tenantId: true,
   externalId: true,
   title: true,
   description: true,
@@ -50,10 +50,20 @@ const incidentSelect = {
   updatedAt: true,
 } as const;
 
-export async function createIncident(input: CreateIncidentInput, actorUserId: bigint): Promise<IncidentResponse> {
-  return prisma.$transaction(async (tx) => {
+export async function createIncident(
+  db: Prisma.TransactionClient,
+  tenantId: bigint,
+  input: CreateIncidentInput,
+  actorUserId: bigint,
+): Promise<IncidentResponse> {
+  return db.$transaction(async (tx) => {
     const incident = await tx.incident.create({
       data: {
+        // The tenant-scoping extension overwrites this to the JWT-derived
+        // tenantId regardless of what's passed here (never trust a
+        // caller-supplied value) — passed explicitly only to satisfy
+        // Prisma's generated type, which requires the column.
+        tenantId,
         title: input.title,
         description: input.description,
         category: input.category,
@@ -72,6 +82,7 @@ export async function createIncident(input: CreateIncidentInput, actorUserId: bi
     });
 
     await writeOutboxEvent(tx, {
+      tenantId,
       eventType: "INCIDENT_CREATED",
       aggregateType: "INCIDENT",
       aggregateId: incident.id.toString(),
@@ -86,7 +97,10 @@ export async function createIncident(input: CreateIncidentInput, actorUserId: bi
   });
 }
 
-export async function listIncidents(query: ListIncidentsQuery): Promise<PaginatedResult<IncidentResponse>> {
+export async function listIncidents(
+  db: Prisma.TransactionClient,
+  query: ListIncidentsQuery,
+): Promise<PaginatedResult<IncidentResponse>> {
   const where: Prisma.IncidentWhereInput = {
     deletedAt: null,
     ...(query.status && { status: query.status }),
@@ -105,28 +119,29 @@ export async function listIncidents(query: ListIncidentsQuery): Promise<Paginate
   const { skip, take } = toSkipTake(query.page, query.pageSize);
 
   const [data, total] = await Promise.all([
-    prisma.incident.findMany({
+    db.incident.findMany({
       where,
       select: incidentSelect,
       orderBy: { [query.sortBy]: query.sortDir },
       skip,
       take,
     }),
-    prisma.incident.count({ where }),
+    db.incident.count({ where }),
   ]);
 
   return { data, pagination: buildPaginationMeta(total, query.page, query.pageSize) };
 }
 
-export function getIncidentById(id: bigint): Promise<IncidentResponse | null> {
-  return prisma.incident.findFirst({ where: { id, deletedAt: null }, select: incidentSelect });
+export function getIncidentById(db: Prisma.TransactionClient, id: bigint): Promise<IncidentResponse | null> {
+  return db.incident.findFirst({ where: { id, deletedAt: null }, select: incidentSelect });
 }
 
 // Used by every sub-resource controller (tasks, evidence, comments, alerts,
 // playbook runs) before creating a child row, so attaching something to a
-// nonexistent incident 404s instead of surfacing as a raw FK-violation 409.
-export async function assertIncidentExists(id: bigint): Promise<void> {
-  const exists = await prisma.incident.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
+// nonexistent (or another tenant's) incident 404s instead of surfacing as a
+// raw FK-violation 409.
+export async function assertIncidentExists(db: Prisma.TransactionClient, id: bigint): Promise<void> {
+  const exists = await db.incident.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
   if (!exists) {
     throw new HttpError(404, "Incident not found");
   }
@@ -153,11 +168,13 @@ export interface UpdateIncidentResult {
  * normal edits after Closed except reopen" requirement.
  */
 export async function updateIncident(
+  db: Prisma.TransactionClient,
+  tenantId: bigint,
   id: bigint,
   input: UpdateIncidentInput,
   actorUserId: bigint,
 ): Promise<UpdateIncidentResult> {
-  return prisma.$transaction(async (tx) => {
+  return db.$transaction(async (tx) => {
   const current = await tx.incident.findFirst({ where: { id, deletedAt: null } });
   if (!current) {
     throw new HttpError(404, "Incident not found");
@@ -288,6 +305,7 @@ export async function updateIncident(
   for (const change of changes) {
     const mapping = CHANGE_EVENT[change.type];
     await writeOutboxEvent(tx, {
+      tenantId,
       eventType: mapping.eventType,
       aggregateType: "INCIDENT",
       aggregateId: id.toString(),
@@ -307,11 +325,17 @@ export async function updateIncident(
 // deleted) — added for administrative cleanup of erroneously-created
 // incidents, matching every other resource in this platform having a
 // soft-delete endpoint under the same "Delete" permission.
-export async function deleteIncident(id: bigint, actorUserId: bigint): Promise<void> {
-  await assertIncidentExists(id);
-  await prisma.$transaction(async (tx) => {
+export async function deleteIncident(
+  db: Prisma.TransactionClient,
+  tenantId: bigint,
+  id: bigint,
+  actorUserId: bigint,
+): Promise<void> {
+  await assertIncidentExists(db, id);
+  await db.$transaction(async (tx) => {
     await tx.incident.update({ where: { id }, data: { deletedAt: new Date() } });
     await writeOutboxEvent(tx, {
+      tenantId,
       eventType: "INCIDENT_DELETED",
       aggregateType: "INCIDENT",
       aggregateId: id.toString(),

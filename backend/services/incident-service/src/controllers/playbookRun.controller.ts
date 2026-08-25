@@ -2,11 +2,11 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { startPlaybookRunSchema } from "../interfaces/playbookRun";
 import * as playbookRunService from "../services/playbookRun.service";
+import * as playbookCatalogService from "../services/playbookCatalog.service";
 import * as incidentService from "../services/incident.service";
 import { recordTimelineEvent } from "../services/timeline.service";
 import { publishEvent } from "../events/eventBus.service";
 import { ROUTING_KEYS } from "../events/topology";
-import { PLAYBOOK_CATALOG } from "../constants/incidents";
 import { parseBigIntId } from "../utils";
 
 function parseIds(req: Request, res: Response): { incidentId: bigint; runId?: bigint } | null {
@@ -25,8 +25,9 @@ function parseIds(req: Request, res: Response): { incidentId: bigint; runId?: bi
   return { incidentId, runId };
 }
 
-export function listPlaybookCatalog(_req: Request, res: Response) {
-  res.json({ data: PLAYBOOK_CATALOG });
+export async function listPlaybookCatalog(req: Request, res: Response) {
+  const catalog = await playbookCatalogService.getCatalog(req.db);
+  res.json({ data: catalog });
 }
 
 export async function startPlaybookRun(req: Request, res: Response) {
@@ -39,10 +40,16 @@ export async function startPlaybookRun(req: Request, res: Response) {
     return;
   }
 
-  await incidentService.assertIncidentExists(ids.incidentId);
-  const run = await playbookRunService.startPlaybookRun(ids.incidentId, result.data, req.auth!.userId);
+  await incidentService.assertIncidentExists(req.db, ids.incidentId);
+  const run = await playbookRunService.startPlaybookRun(
+    req.db,
+    req.auth!.tenantId,
+    ids.incidentId,
+    result.data,
+    req.auth!.userId,
+  );
 
-  await recordTimelineEvent({
+  await recordTimelineEvent(req.db, req.auth!.tenantId, {
     incidentId: ids.incidentId,
     eventType: "playbook_started",
     actorUserId: req.auth!.userId,
@@ -69,10 +76,16 @@ export async function approvePlaybookRun(req: Request, res: Response) {
     return;
   }
 
-  await incidentService.assertIncidentExists(ids.incidentId);
-  const run = await playbookRunService.approvePlaybookRun(ids.incidentId, ids.runId, req.auth!.userId);
+  await incidentService.assertIncidentExists(req.db, ids.incidentId);
+  const run = await playbookRunService.approvePlaybookRun(
+    req.db,
+    req.auth!.tenantId,
+    ids.incidentId,
+    ids.runId,
+    req.auth!.userId,
+  );
 
-  await recordTimelineEvent({
+  await recordTimelineEvent(req.db, req.auth!.tenantId, {
     incidentId: ids.incidentId,
     eventType: "playbook_approved",
     actorUserId: req.auth!.userId,
@@ -87,7 +100,7 @@ export async function listPlaybookRuns(req: Request, res: Response) {
   const ids = parseIds(req, res);
   if (!ids) return;
 
-  await incidentService.assertIncidentExists(ids.incidentId);
-  const runs = await playbookRunService.listPlaybookRuns(ids.incidentId);
+  await incidentService.assertIncidentExists(req.db, ids.incidentId);
+  const runs = await playbookRunService.listPlaybookRuns(req.db, ids.incidentId);
   res.json({ data: runs });
 }

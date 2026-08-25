@@ -51,3 +51,40 @@ export async function ensureModuleSeeded(moduleName: string, sortOrder: number):
     }
   }
 }
+
+/**
+ * Seeds the Tenants module + its View/Create/Update/Delete permissions,
+ * WITHOUT granting them to "Administrator" — unlike ensureModuleSeeded()
+ * above. Administrator is the role every tenant's own first admin holds;
+ * auto-granting Tenants access to it would let any tenant's admin manage
+ * every OTHER tenant. Nobody holds this permission until a platform
+ * operator is granted it explicitly through the Roles/Permissions UI.
+ */
+export async function ensureTenantsModuleSeeded(): Promise<void> {
+  const module =
+    (await prisma.module.findFirst({ where: { name: MODULE_NAMES.TENANTS, deletedAt: null } })) ??
+    (await prisma.module.create({ data: { name: MODULE_NAMES.TENANTS, sortOrder: 9, isSystem: true } }));
+
+  const actionNames = Object.values(ACTION_NAMES);
+  const actions = await Promise.all(
+    actionNames.map(async (actionName) => {
+      const existing = await prisma.action.findFirst({ where: { name: actionName, deletedAt: null } });
+      if (existing) return existing;
+      return prisma.action.create({ data: { name: actionName, sortOrder: actionNames.indexOf(actionName) } });
+    }),
+  );
+
+  await Promise.all(
+    actions.map(async (action) => {
+      const existing = await prisma.permission.findFirst({
+        where: { moduleId: module.id, actionId: action.id, deletedAt: null },
+      });
+      return (
+        existing ??
+        prisma.permission.create({
+          data: { moduleId: module.id, actionId: action.id, name: `${action.name} ${module.name}` },
+        })
+      );
+    }),
+  );
+}

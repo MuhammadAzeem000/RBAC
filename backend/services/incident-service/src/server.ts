@@ -4,6 +4,7 @@ import cors from "cors";
 import express from "express";
 import { Request, Response } from "express";
 import { authenticate } from "./middlewares/authenticate";
+import { tenantContext } from "./middlewares/tenantContext";
 import { connectEventBus } from "./events/eventBus.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { incidentRouter } from "./routes/incident.routes";
@@ -28,7 +29,7 @@ app.get("/health", (_req: Request, res: Response) => {
 // /api/v1/incidents/... — every route requires a valid identity-service
 // access token; per-action permission checks happen inside incidentRouter
 // via requireIncidentPermission (which calls identity-service).
-app.use("/api/v1/incidents", authenticate, incidentRouter);
+app.use("/api/v1/incidents", authenticate, tenantContext, incidentRouter);
 
 app.use(notFound);
 app.use(errorHandler);

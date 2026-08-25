@@ -23,7 +23,7 @@ function eventBuffer(payload: Record<string, unknown>): Buffer {
 }
 
 describe("notification consumer — atomic Notification + outbox on send", () => {
-  const event = { userId: "1", name: "Alice", email: "alice@example.com" };
+  const event = { userId: "1", tenantId: "1", name: "Alice", email: "alice@example.com" };
 
   it("records a 'sent' Notification and NOTIFICATION_SENT outbox event on success", async () => {
     mockedSendEmail.mockResolvedValue(undefined);

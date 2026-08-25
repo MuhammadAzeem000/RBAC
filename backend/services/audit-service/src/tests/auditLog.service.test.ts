@@ -18,6 +18,7 @@ function makeEvent(overrides: Partial<AuditEventMessage> = {}): AuditEventMessag
     eventType: "INCIDENT_CREATED",
     timestamp: "2026-08-19T00:00:00.000Z",
     service: "incident-service",
+    tenantId: "1",
     actorId: "1",
     actorType: "USER",
     action: "CREATE",
@@ -39,10 +40,18 @@ describe("auditLog.service persistIdempotent", () => {
     expect(mockedPrisma.auditLog.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { eventId: "event-123" },
+        create: expect.objectContaining({ tenantId: 1n }),
         update: {},
       }),
     );
     expect(result.created).toBe(true);
+  });
+
+  it("throws when the event is missing tenantId, rather than silently defaulting it", async () => {
+    await expect(
+      auditLogService.persistIdempotent(makeEvent({ tenantId: undefined as unknown as string })),
+    ).rejects.toThrow(/tenantId/);
+    expect(mockedPrisma.auditLog.upsert).not.toHaveBeenCalled();
   });
 
   it("is idempotent — processing the same eventId three times only ever upserts with the same conflict key and never throws", async () => {

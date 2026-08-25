@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { prisma } from "../config/prisma";
 import { bigIntId } from "../interfaces/common";
 import * as outboxService from "../services/outbox.service";
 import * as roleService from "../services/role.service";
@@ -20,13 +19,13 @@ export async function getRolesForUser(req: Request, res: Response) {
   const pagination = parsePagination(req, res);
   if (!pagination) return;
 
-  const user = await userService.getUserById(userId);
+  const user = await userService.getUserById(req.db, userId);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  const result = await userRoleService.getRolesForUser(userId, pagination);
+  const result = await userRoleService.getRolesForUser(req.db, userId, pagination);
   res.json(result);
 }
 
@@ -43,7 +42,7 @@ export async function assignRoleToUser(req: Request, res: Response) {
     return;
   }
 
-  const user = await userService.getUserById(userId);
+  const user = await userService.getUserById(req.db, userId);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -55,9 +54,10 @@ export async function assignRoleToUser(req: Request, res: Response) {
     return;
   }
 
-  const assignment = await prisma.$transaction(async (tx) => {
-    const created = await userRoleService.assignRoleToUser(userId, role.id, tx);
+  const assignment = await req.db.$transaction(async (tx) => {
+    const created = await userRoleService.assignRoleToUser(tx, req.auth!.tenantId, userId, role.id);
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "USER_ROLE_ASSIGNED",
       aggregateType: "USER",
       aggregateId: userId.toString(),
@@ -80,10 +80,11 @@ export async function revokeRoleFromUser(req: Request, res: Response) {
     return;
   }
 
-  const revoked = await prisma.$transaction(async (tx) => {
-    const wasRevoked = await userRoleService.revokeRoleFromUser(userId, roleId, tx);
+  const revoked = await req.db.$transaction(async (tx) => {
+    const wasRevoked = await userRoleService.revokeRoleFromUser(tx, userId, roleId);
     if (wasRevoked) {
       await outboxService.writeOutboxEvent(tx, {
+        tenantId: req.auth!.tenantId,
         eventType: "USER_ROLE_REVOKED",
         aggregateType: "USER",
         aggregateId: userId.toString(),

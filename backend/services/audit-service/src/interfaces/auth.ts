@@ -4,5 +4,6 @@
 export interface AccessTokenClaims {
   sub: string;
   email: string;
+  tenantId: string;
   type: "access";
 }

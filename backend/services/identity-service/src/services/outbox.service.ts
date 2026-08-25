@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Prisma } from "../generated/prisma/client";
 
 export interface AuditEventInput {
+  tenantId: bigint;
   eventType: string;
   aggregateType: string;
   aggregateId: string;
@@ -23,11 +24,18 @@ type TxClient = Prisma.TransactionClient;
  * the entire correctness property the transactional outbox pattern rests
  * on: never call this outside a `prisma.$transaction(async (tx) => ...)`
  * that also contains the business mutation being audited.
+ *
+ * tenantId is always passed explicitly (not left to the tenant-scoping
+ * extension's create-time auto-stamp) because some callers — bootstrap.
+ * service.ts chief among them — run inside a plain, unscoped `prisma.
+ * $transaction`, since they're creating the tenant itself and have no
+ * caller-tenant to scope against yet.
  */
 export function writeOutboxEvent(tx: TxClient, input: AuditEventInput): Promise<void> {
   return tx.outboxEvent
     .create({
       data: {
+        tenantId: input.tenantId,
         eventId: randomUUID(),
         eventType: input.eventType,
         aggregateType: input.aggregateType,

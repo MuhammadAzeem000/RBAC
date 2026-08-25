@@ -53,6 +53,7 @@ async function connectPublisher(): Promise<void> {
 
 interface ClaimedRow {
   id: bigint;
+  tenant_id: bigint;
   event_id: string;
   event_type: string;
   resource_type: string;
@@ -74,7 +75,7 @@ interface ClaimedRow {
 async function claimBatch(): Promise<ClaimedRow[]> {
   return prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<ClaimedRow[]>`
-      SELECT id, event_id, event_type, resource_type, resource_id, actor_id, actor_type,
+      SELECT id, tenant_id, event_id, event_type, resource_type, resource_id, actor_id, actor_type,
              action, metadata, payload, created_at
       FROM outbox_events
       WHERE published_at IS NULL
@@ -107,6 +108,7 @@ async function publishBatch(): Promise<void> {
     const message = {
       eventId: row.event_id,
       eventType: row.event_type,
+      tenantId: row.tenant_id.toString(),
       timestamp: row.created_at.toISOString(),
       service: SERVICE_NAME,
       actorId: row.actor_id,

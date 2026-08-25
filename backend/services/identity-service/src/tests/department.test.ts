@@ -54,7 +54,7 @@ describe("department.service", () => {
     mockedPrisma.department.findMany.mockResolvedValue([]);
     mockedPrisma.department.count.mockResolvedValue(45);
 
-    const result = await departmentService.getDepartments({ page: 3, pageSize: 20 });
+    const result = await departmentService.getDepartments(mockedPrisma as never, { page: 3, pageSize: 20 });
 
     expect(mockedPrisma.department.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ skip: 40, take: 20 }),
@@ -64,7 +64,7 @@ describe("department.service", () => {
 
   it("deleteDepartment soft-deletes instead of removing the row", async () => {
     mockedPrisma.department.update.mockResolvedValue({ id: 1n });
-    await departmentService.deleteDepartment(1n);
+    await departmentService.deleteDepartment(mockedPrisma as never, 1n);
     expect(mockedPrisma.department.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 1n },
@@ -76,7 +76,7 @@ describe("department.service", () => {
 
 describe("department.controller", () => {
   it("createDepartment responds 400 when name is missing", async () => {
-    const req = { body: {} } as unknown as Request;
+    const req = { body: {}, db: mockedPrisma } as unknown as Request;
     const res = mockRes();
 
     await departmentController.createDepartment(req, res);
@@ -89,18 +89,22 @@ describe("department.controller", () => {
     mockedPrisma.department.create.mockResolvedValue({ id: 1n });
     const req = {
       body: { name: "Infrastructure" },
-      auth: { userId: 9n, email: "alice@example.com" },
+      auth: { userId: 9n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
     await departmentController.createDepartment(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
+    expect(mockedPrisma.department.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ tenantId: 1n }) }),
+    );
   });
 
   it("getDepartmentById responds 404 when the service finds nothing", async () => {
     mockedPrisma.department.findFirst.mockResolvedValue(null);
-    const req = { params: { id: "1" } } as unknown as Request;
+    const req = { params: { id: "1" }, db: mockedPrisma } as unknown as Request;
     const res = mockRes();
 
     await departmentController.getDepartmentById(req, res);
@@ -113,7 +117,8 @@ describe("department.controller", () => {
     const req = {
       params: { id: "1" },
       body: { isActive: false },
-      auth: { userId: 9n, email: "alice@example.com" },
+      auth: { userId: 9n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
@@ -129,7 +134,8 @@ describe("department.controller", () => {
     const req = {
       params: { id: "1" },
       body: { isActive: false },
-      auth: { userId: 9n, email: "alice@example.com" },
+      auth: { userId: 9n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
@@ -143,7 +149,8 @@ describe("department.controller", () => {
     mockedPrisma.userDepartment.findFirst.mockResolvedValue({ userId: 9n });
     const req = {
       params: { id: "1" },
-      auth: { userId: 9n, email: "alice@example.com" },
+      auth: { userId: 9n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
@@ -161,7 +168,8 @@ describe("department.controller", () => {
     mockedPrisma.userDepartment.count.mockResolvedValue(1);
     const req = {
       params: { id: "1" },
-      auth: { userId: 9n, email: "alice@example.com" },
+      auth: { userId: 9n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 
@@ -180,7 +188,8 @@ describe("department.controller", () => {
     mockedPrisma.department.update.mockResolvedValue({ id: 1n });
     const req = {
       params: { id: "1" },
-      auth: { userId: 9n, email: "alice@example.com" },
+      auth: { userId: 9n, email: "alice@example.com", tenantId: 1n },
+      db: mockedPrisma,
     } as unknown as Request;
     const res = mockRes();
 

@@ -1,4 +1,4 @@
-import { prisma } from "../config/prisma";
+import { Prisma } from "../generated/prisma/client";
 import { AddEvidenceInput } from "../interfaces/evidence";
 
 export interface EvidenceResponse {
@@ -28,12 +28,17 @@ const evidenceSelect = {
 } as const;
 
 export function addEvidence(
+  db: Prisma.TransactionClient,
+  tenantId: bigint,
   incidentId: bigint,
   input: AddEvidenceInput,
   actorUserId: bigint,
 ): Promise<EvidenceResponse> {
-  return prisma.evidence.create({
+  return db.evidence.create({
     data: {
+      // See incident.service.ts::createIncident for why this is passed
+      // explicitly even though the tenant-scoping extension overwrites it.
+      tenantId,
       incidentId,
       filename: input.filename,
       fileType: input.fileType,
@@ -47,8 +52,8 @@ export function addEvidence(
   });
 }
 
-export function listEvidence(incidentId: bigint): Promise<EvidenceResponse[]> {
-  return prisma.evidence.findMany({
+export function listEvidence(db: Prisma.TransactionClient, incidentId: bigint): Promise<EvidenceResponse[]> {
+  return db.evidence.findMany({
     where: { incidentId },
     select: evidenceSelect,
     orderBy: { uploadedAt: "desc" },

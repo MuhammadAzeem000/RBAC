@@ -24,6 +24,7 @@ export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 export interface UserResponse {
   id: bigint;
+  tenantId: bigint;
   name: string;
   email: string;
   avatarUrl: string | null;

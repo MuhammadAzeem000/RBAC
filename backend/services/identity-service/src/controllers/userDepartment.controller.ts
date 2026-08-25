@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { prisma } from "../config/prisma";
 import { bigIntId } from "../interfaces/common";
 import * as departmentService from "../services/department.service";
 import * as outboxService from "../services/outbox.service";
@@ -23,13 +22,13 @@ export async function getDepartmentsForUser(req: Request, res: Response) {
   const pagination = parsePagination(req, res);
   if (!pagination) return;
 
-  const user = await userService.getUserById(userId);
+  const user = await userService.getUserById(req.db, userId);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  const result = await userDepartmentService.getDepartmentsForUser(userId, pagination);
+  const result = await userDepartmentService.getDepartmentsForUser(req.db, userId, pagination);
   res.json(result);
 }
 
@@ -46,26 +45,28 @@ export async function assignDepartmentToUser(req: Request, res: Response) {
     return;
   }
 
-  const user = await userService.getUserById(userId);
+  const user = await userService.getUserById(req.db, userId);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  const department = await departmentService.getDepartmentById(result.data.departmentId);
+  const department = await departmentService.getDepartmentById(req.db, result.data.departmentId);
   if (!department) {
     res.status(404).json({ error: "Department not found" });
     return;
   }
 
-  const assignment = await prisma.$transaction(async (tx) => {
+  const assignment = await req.db.$transaction(async (tx) => {
     const created = await userDepartmentService.assignDepartmentToUser(
+      tx,
+      req.auth!.tenantId,
       userId,
       department.id,
       result.data.isPrimary,
-      tx,
     );
     await outboxService.writeOutboxEvent(tx, {
+      tenantId: req.auth!.tenantId,
       eventType: "USER_DEPARTMENT_ASSIGNED",
       aggregateType: "USER",
       aggregateId: userId.toString(),
@@ -88,10 +89,11 @@ export async function revokeDepartmentFromUser(req: Request, res: Response) {
     return;
   }
 
-  const revoked = await prisma.$transaction(async (tx) => {
-    const wasRevoked = await userDepartmentService.revokeDepartmentFromUser(userId, departmentId, tx);
+  const revoked = await req.db.$transaction(async (tx) => {
+    const wasRevoked = await userDepartmentService.revokeDepartmentFromUser(tx, userId, departmentId);
     if (wasRevoked) {
       await outboxService.writeOutboxEvent(tx, {
+        tenantId: req.auth!.tenantId,
         eventType: "USER_DEPARTMENT_REVOKED",
         aggregateType: "USER",
         aggregateId: userId.toString(),

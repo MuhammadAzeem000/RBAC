@@ -23,6 +23,7 @@ const event: AuditEventMessage = {
   eventType: "INCIDENT_CREATED",
   timestamp: "2026-08-19T00:00:00.000Z",
   service: "incident-service",
+  tenantId: "1",
   actorId: "1",
   actorType: "USER",
   action: "CREATE",

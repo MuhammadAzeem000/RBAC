@@ -13,6 +13,13 @@ export const MODULE_NAMES = {
   PERMISSIONS: "Permissions",
   AUDIT_LOGS: "Audit Logs",
   INCIDENTS: "Incidents",
+  // Platform-level, not per-tenant: deliberately excluded from the
+  // "grant every module to the new Administrator role" loop in
+  // bootstrap.service.ts, since Administrator is the role every tenant's
+  // own first admin gets. Nobody holds this permission until a genuine
+  // platform operator is granted it explicitly, the same way any other
+  // permission is granted — through the existing Roles/Permissions UI.
+  TENANTS: "Tenants",
 } as const;
 
 export const ACTION_NAMES = {

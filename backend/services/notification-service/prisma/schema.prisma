@@ -15,6 +15,8 @@ datasource db {
 model Notification {
   id BigInt @id @default(autoincrement())
 
+  tenantId BigInt @map("tenant_id")
+
   recipientEmail String  @map("recipient_email") @db.VarChar(255)
   templateKey    String  @map("template_key") @db.VarChar(100)
   status         String  @db.VarChar(20) // sent | failed
@@ -25,6 +27,7 @@ model Notification {
 
   @@index([status])
   @@index([recipientEmail])
+  @@index([tenantId])
   @@map("notifications")
 }
 
@@ -33,6 +36,8 @@ model Notification {
 // two can never diverge.
 model OutboxEvent {
   id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
 
   eventId       String  @unique @map("event_id") @db.VarChar(36)
   eventType     String  @map("event_type") @db.VarChar(100)
@@ -55,5 +60,6 @@ model OutboxEvent {
   lastError   String?   @map("last_error") @db.Text
 
   @@index([publishedAt])
+  @@index([tenantId])
   @@map("outbox_events")
 }

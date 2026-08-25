@@ -6,6 +6,14 @@ FROM node:20-alpine AS build
 RUN apk add --no-cache openssl
 WORKDIR /app
 
+# @responderx/shared is a "file:../../shared" dependency (see package.json)
+# resolved relative to /app, so it must live at /shared — same depth as
+# docker-compose.dev.yml's bind mount, just built instead of live-mounted.
+# It needs its own install+build (its compiled dist/ isn't committed to git)
+# before this service's own `npm ci` can resolve it.
+COPY backend/shared /shared
+RUN npm --prefix /shared ci && npm --prefix /shared run build
+
 COPY backend/services/audit-service/package*.json ./
 RUN npm ci
 
@@ -31,6 +39,7 @@ RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
 
+COPY --from=build /shared /shared
 COPY backend/services/audit-service/package*.json ./
 RUN npm ci --omit=dev
 

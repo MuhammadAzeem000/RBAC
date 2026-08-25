@@ -23,11 +23,15 @@ export type TaskStatus = (typeof TASK_STATUSES)[number];
 export const PLAYBOOK_RUN_STATES = ["pending_approval", "running", "succeeded", "failed", "cancelled"] as const;
 export type PlaybookRunState = (typeof PLAYBOOK_RUN_STATES)[number];
 
-// Fixed example catalog standing in for a real playbook engine's registry —
-// there is no SOAR automation engine in this codebase (see schema.prisma's
-// PlaybookRun comment). `requiresApproval` drives the spec's "explicit
+// Seed data only — the runtime catalog is now the DB-backed Playbook /
+// PlaybookVersion tables (see prisma/seed.ts, which inserts these as each
+// tenant's starting catalog, and services/playbookCatalog.service.ts, which
+// serves it). `requiresApproval` drives the spec's "explicit
 // confirmation/approval for actions marked destructive or high risk" rule.
-export const PLAYBOOK_CATALOG = [
+// There is still no real SOAR automation engine in this codebase (see
+// schema.prisma's PlaybookRun comment) — this only replaces the catalog,
+// not execution.
+export const PLAYBOOK_SEED_DATA = [
   {
     key: "enrich-ioc",
     name: "Enrich Indicators of Compromise",
@@ -60,8 +64,4 @@ export const PLAYBOOK_CATALOG = [
   },
 ] as const;
 
-export type PlaybookKey = (typeof PLAYBOOK_CATALOG)[number]["key"];
-
-export function findPlaybook(key: string) {
-  return PLAYBOOK_CATALOG.find((p) => p.key === key) ?? null;
-}
+export type PlaybookSeedKey = (typeof PLAYBOOK_SEED_DATA)[number]["key"];
