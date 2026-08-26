@@ -10,6 +10,7 @@
 // identity-service already publishes is a natural follow-up, not built here
 // to keep this phase's scope to "make the catalog real," not "automate
 // onboarding."
+import { Prisma } from "../src/generated/prisma/client";
 import { prisma } from "../src/config/prisma";
 import { PLAYBOOK_SEED_DATA } from "../src/constants/incidents";
 
@@ -23,19 +24,20 @@ async function main() {
       create: { tenantId, key: entry.key, name: entry.name, description: entry.description },
     });
 
+    const steps = entry.steps as unknown as Prisma.InputJsonValue;
     await prisma.playbookVersion.upsert({
       where: { playbookId_version: { playbookId: playbook.id, version: "1.0" } },
-      update: { requiresApproval: entry.requiresApproval },
+      update: { requiresApproval: entry.requiresApproval, steps },
       create: {
         tenantId,
         playbookId: playbook.id,
         version: "1.0",
         requiresApproval: entry.requiresApproval,
-        steps: [],
+        steps,
       },
     });
 
-    console.log(`Seeded playbook "${entry.key}" (v1.0) for tenant ${tenantId}`);
+    console.log(`Seeded playbook "${entry.key}" (v1.0, ${entry.steps.length} step(s)) for tenant ${tenantId}`);
   }
 }
 

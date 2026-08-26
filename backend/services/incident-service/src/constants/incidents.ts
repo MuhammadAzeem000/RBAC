@@ -28,39 +28,58 @@ export type PlaybookRunState = (typeof PLAYBOOK_RUN_STATES)[number];
 // tenant's starting catalog, and services/playbookCatalog.service.ts, which
 // serves it). `requiresApproval` drives the spec's "explicit
 // confirmation/approval for actions marked destructive or high risk" rule.
-// There is still no real SOAR automation engine in this codebase (see
-// schema.prisma's PlaybookRun comment) — this only replaces the catalog,
-// not execution.
+// `steps` are still simulated actions (no real connectors yet — that's a
+// later phase) but now run as real, individually-retried, individually-
+// audited Temporal Activities (see src/temporal/) instead of one opaque
+// timer — each step becomes its own StepExecution row.
 export const PLAYBOOK_SEED_DATA = [
   {
     key: "enrich-ioc",
     name: "Enrich Indicators of Compromise",
     description: "Look up reputation/context for IPs, domains, and hashes referenced by the incident.",
     requiresApproval: false,
+    steps: [
+      { key: "lookup-ip-reputation", name: "Look up IP reputation", config: {} },
+      { key: "lookup-domain-reputation", name: "Look up domain reputation", config: {} },
+      { key: "lookup-file-hash-reputation", name: "Look up file hash reputation", config: {} },
+    ],
   },
   {
     key: "isolate-host",
     name: "Isolate Host",
     description: "Network-isolate an affected endpoint to contain active spread.",
     requiresApproval: true,
+    steps: [
+      { key: "network-isolate", name: "Network-isolate endpoint", config: {} },
+      { key: "disable-host-network", name: "Disable host network adapter", config: {} },
+    ],
   },
   {
     key: "disable-user-account",
     name: "Disable User Account",
     description: "Disable a compromised user account pending investigation.",
     requiresApproval: true,
+    steps: [
+      { key: "disable-account", name: "Disable user account", config: {} },
+      { key: "revoke-sessions", name: "Revoke active sessions", config: {} },
+    ],
   },
   {
     key: "reset-credentials",
     name: "Reset Credentials",
     description: "Force a credential reset for an affected account.",
     requiresApproval: true,
+    steps: [
+      { key: "force-password-reset", name: "Force password reset", config: {} },
+      { key: "revoke-api-tokens", name: "Revoke API tokens", config: {} },
+    ],
   },
   {
     key: "notify-stakeholders",
     name: "Notify Stakeholders",
     description: "Send a status update to the configured incident stakeholder list.",
     requiresApproval: false,
+    steps: [{ key: "send-stakeholder-notification", name: "Send stakeholder notification", config: {} }],
   },
 ] as const;
 

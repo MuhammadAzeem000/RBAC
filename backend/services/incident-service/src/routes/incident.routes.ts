@@ -46,5 +46,10 @@ incidentRouter.post(
   canUpdate,
   asyncHandler(playbookRunController.approvePlaybookRun),
 );
+incidentRouter.post(
+  "/:id/playbook-runs/:runId/cancel",
+  canUpdate,
+  asyncHandler(playbookRunController.cancelPlaybookRun),
+);
 
 incidentRouter.get("/:id/timeline", canView, asyncHandler(timelineController.getTimeline));

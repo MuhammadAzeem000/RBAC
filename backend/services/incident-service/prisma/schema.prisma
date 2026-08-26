@@ -152,14 +152,18 @@ model Comment {
   @@map("incident_comments")
 }
 
-// No real SOAR automation engine exists in this codebase — this is a
-// recorded, simulated execution: starting a run schedules a deterministic
-// transition to succeeded/failed shortly after, so the API contract, audit
-// trail, and UI can all be exercised honestly without pretending to
-// integrate a real engine. playbookVersionId pins the run to the exact
-// Playbook/PlaybookVersion it started with (MVP plan's "version pinning"
-// principle) — playbookKey/playbookVersion stay as a denormalized display
-// snapshot, same values as the version's own key/version at the time.
+// Orchestration is real (Temporal — see src/temporal/): starting a run
+// starts a durable Workflow Execution that survives a worker restart,
+// instead of a detached setTimeout. Individual steps still simulate their
+// action (no real connectors yet — see PLAYBOOK_SEED_DATA), but the
+// execution ENGINE itself is real, matching this comment's spirit even
+// though its literal wording predates Temporal. playbookVersionId pins the
+// run to the exact Playbook/PlaybookVersion it started with (MVP plan's
+// "version pinning" principle) — playbookKey/playbookVersion stay as a
+// denormalized display snapshot, same values as the version's own key/
+// version at the time. temporalWorkflowId correlates this row to its
+// Workflow Execution; nullable because rows created before Temporal was
+// wired in (Phase 1 smoke-testing) predate it.
 model PlaybookRun {
   id         BigInt @id @default(autoincrement())
   tenantId   BigInt @map("tenant_id")
@@ -168,6 +172,8 @@ model PlaybookRun {
   playbookVersionId BigInt @map("playbook_version_id")
   playbookKey       String @map("playbook_key") @db.VarChar(100)
   playbookVersion   String @default("1.0") @map("playbook_version") @db.VarChar(20)
+
+  temporalWorkflowId String? @map("temporal_workflow_id") @db.VarChar(255)
 
   state String @default("pending_approval") @db.VarChar(30)
 
@@ -185,13 +191,43 @@ model PlaybookRun {
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  incident Incident        @relation(fields: [incidentId], references: [id])
-  version  PlaybookVersion @relation(fields: [playbookVersionId], references: [id])
+  incident       Incident        @relation(fields: [incidentId], references: [id])
+  version        PlaybookVersion @relation(fields: [playbookVersionId], references: [id])
+  stepExecutions StepExecution[]
 
   @@index([tenantId])
   @@index([incidentId])
   @@index([playbookVersionId])
   @@map("incident_playbook_runs")
+}
+
+// One row per playbook step actually executed by the Temporal workflow —
+// the per-step audit trail the MVP plan's domain model calls "Step
+// Execution" (mirrored in @responderx/shared's execution.ts). Written by
+// Activities (src/temporal/activities.ts), never directly by an HTTP route.
+model StepExecution {
+  id            BigInt @id @default(autoincrement())
+  tenantId      BigInt @map("tenant_id")
+  playbookRunId BigInt @map("playbook_run_id")
+
+  stepKey  String @map("step_key") @db.VarChar(100)
+  stepName String @map("step_name") @db.VarChar(150)
+  status   String @default("pending") @db.VarChar(20)
+
+  input  Json? @db.Json
+  output Json? @db.Json
+
+  attempts Int @default(0)
+
+  startedAt DateTime? @map("started_at") @db.Timestamp(6)
+  endedAt   DateTime? @map("ended_at") @db.Timestamp(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  playbookRun PlaybookRun @relation(fields: [playbookRunId], references: [id])
+
+  @@index([tenantId])
+  @@index([playbookRunId])
+  @@map("step_executions")
 }
 
 // Append-only by convention — no route ever updates or deletes a row here.

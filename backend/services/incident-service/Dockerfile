@@ -1,9 +1,16 @@
 # Build context is the repo root (see docker-compose.yml), so all COPY paths
 # below are relative to the repo root, not this file's directory.
+#
+# Debian-based (node:20-slim), NOT node:20-alpine like every other service's
+# Dockerfile in this repo — @temporalio/core-bridge (src/temporal/) ships a
+# native binding built against glibc, and Alpine's musl libc can't load it
+# (confirmed: neither running unmodified nor with the "gcompat" compatibility
+# shim, which is missing symbols like gnu_get_libc_version the binding
+# actually needs — this isn't a "just add a package" fix on Alpine).
 
 # ---- Build stage: compile TypeScript + generate the Prisma client ----
-FROM node:20-alpine AS build
-RUN apk add --no-cache openssl
+FROM node:20-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # @responderx/shared is a "file:../../shared" dependency (see package.json)
@@ -34,8 +41,8 @@ RUN npx prisma generate
 RUN npm run build
 
 # ---- Production stage ----
-FROM node:20-alpine AS production
-RUN apk add --no-cache openssl
+FROM node:20-slim AS production
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production
 

@@ -57,6 +57,45 @@ services:
       # notification-service needs it, over the compose network.
       - "8025:8025"
 
+  # Durable workflow engine backing incident-service's playbook execution
+  # (see backend/services/incident-service/src/temporal/). auto-setup creates
+  # its own "temporal"/"temporal_visibility" databases on the EXISTING
+  # postgres container on first boot — no separate Postgres instance needed.
+  temporal:
+    image: temporalio/auto-setup:1.29.1
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: ${DB_USER:-commtel}
+      POSTGRES_PWD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      # temporalio/auto-setup:1.29.1 only ships config/dynamicconfig/docker.yaml
+      # (empty, which is fine — dynamic config is optional) — the "development-sql.yaml"
+      # path from Temporal's own reference docker-compose repo doesn't exist in this tag.
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
+    # Not published to the host on purpose, same reasoning as postgres above
+    # — only incident-service's worker needs it, over the compose network.
+    # Uncomment to reach it directly (e.g. with `tctl`/`temporal` CLI):
+    # ports:
+    #   - "7233:7233"
+
+  # Web UI onto the Temporal server above — every playbook-run workflow's
+  # full history (retries, signals, timers) is visible here, at
+  # localhost:8080, without any custom observability code.
+  temporal-ui:
+    image: temporalio/ui:2.34.0
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "8080:8080"
+
   # Auth (register/login/refresh/logout/me) plus users, departments, roles,
   # permissions, modules, actions, audit logs — kept as one service since
   # they're all relationally coupled through one Postgres schema (foreign
@@ -115,6 +154,8 @@ services:
         condition: service_healthy
       identity-service:
         condition: service_healthy
+      temporal:
+        condition: service_started
     environment:
       PORT: 4200
       NODE_ENV: production
@@ -123,6 +164,7 @@ services:
       DB_USER: ${DB_USER:-commtel}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
       DB_NAME: incident_db
+      TEMPORAL_ADDRESS: temporal:7233
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
       IDENTITY_SERVICE_URL: http://identity-service:4000
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}

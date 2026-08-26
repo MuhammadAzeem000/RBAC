@@ -10,6 +10,7 @@ import { errorHandler } from "./middlewares/errorHandler";
 import { incidentRouter } from "./routes/incident.routes";
 import { notFound } from "./middlewares/notFound";
 import { startOutboxPublisher } from "./services/outboxPublisher.service";
+import { startPlaybookWorker } from "./temporal/worker";
 
 const app = express();
 const PORT = env.PORT;
@@ -46,3 +47,8 @@ void connectEventBus();
 // Delivers this service's transactional-outbox rows to audit-service —
 // independent of connectEventBus() above; audit events are not domain events.
 startOutboxPublisher();
+
+// Durable playbook-run execution — see src/temporal/. Runs its own
+// reconnect loop (like connectEventBus above), so a slow-starting or
+// temporarily unreachable Temporal server never delays request handling.
+void startPlaybookWorker();
