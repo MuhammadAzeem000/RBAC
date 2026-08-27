@@ -42,9 +42,9 @@ incidentRouter.get("/:id/evidence", canView, asyncHandler(evidenceController.lis
 incidentRouter.post("/:id/playbook-runs", canUpdate, asyncHandler(playbookRunController.startPlaybookRun));
 incidentRouter.get("/:id/playbook-runs", canView, asyncHandler(playbookRunController.listPlaybookRuns));
 incidentRouter.post(
-  "/:id/playbook-runs/:runId/approve",
+  "/:id/playbook-runs/:runId/cancel",
   canUpdate,
-  asyncHandler(playbookRunController.approvePlaybookRun),
+  asyncHandler(playbookRunController.cancelPlaybookRun),
 );
 
 incidentRouter.get("/:id/timeline", canView, asyncHandler(timelineController.getTimeline));

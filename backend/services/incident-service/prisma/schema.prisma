@@ -64,6 +64,15 @@ model Incident {
 
 // Immutable source context once attached — analyst annotations belong to the
 // incident (comments/notes), never to the alert row itself.
+// Two ways a row here comes to exist: attachAlert (a human linking a
+// related alert to an incident that already exists — summary required,
+// severity/occurredAt/rawRef left null) and ingestAlert (Phase 5: a real
+// alert arriving via POST /api/v1/alerts, which creates the Incident AND
+// this row together — severity/occurredAt/rawRef populated from the
+// canonical @responderx/shared Alert shape, summary synthesized since the
+// canonical shape has no such field). @@unique below is the concrete dedup
+// mechanism ingestAlert relies on: the same (source, externalId) arriving
+// twice returns the existing row instead of creating a duplicate incident.
 model Alert {
   id         BigInt @id @default(autoincrement())
   tenantId   BigInt @map("tenant_id")
@@ -71,17 +80,47 @@ model Alert {
 
   externalAlertId String  @map("external_alert_id") @db.VarChar(150)
   source          String  @db.VarChar(100)
-  summary         String  @db.Text
+  summary         String? @db.Text
   rawPayload      Json?   @map("raw_payload") @db.Json
+
+  severity   String?   @db.VarChar(20)
+  occurredAt DateTime? @map("occurred_at") @db.Timestamp(6)
+  rawRef     String?   @map("raw_ref") @db.VarChar(500)
 
   attachedBy BigInt   @map("attached_by")
   attachedAt DateTime @default(now()) @map("attached_at") @db.Timestamp(6)
 
   incident Incident @relation(fields: [incidentId], references: [id])
+  entities Entity[]
 
+  @@unique([tenantId, source, externalAlertId])
   @@index([tenantId])
   @@index([incidentId])
   @@map("incident_alerts")
+}
+
+// A normalized indicator referenced by an alert (MVP plan §4's Entity row —
+// mirrored in @responderx/shared's entity.ts). Persisted structurally
+// rather than as opaque JSON so a future correlation/query feature
+// ("every alert touching this IP") doesn't need a schema change to exist —
+// not built in this phase, just not precluded by how this is stored.
+model Entity {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+  alertId  BigInt @map("alert_id")
+
+  type       String  @db.VarChar(30)
+  value      String  @db.VarChar(500)
+  confidence Float?
+  attributes Json?   @db.Json
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  alert Alert @relation(fields: [alertId], references: [id])
+
+  @@index([tenantId])
+  @@index([alertId])
+  @@map("entities")
 }
 
 model Task {
@@ -152,14 +191,18 @@ model Comment {
   @@map("incident_comments")
 }
 
-// No real SOAR automation engine exists in this codebase — this is a
-// recorded, simulated execution: starting a run schedules a deterministic
-// transition to succeeded/failed shortly after, so the API contract, audit
-// trail, and UI can all be exercised honestly without pretending to
-// integrate a real engine. playbookVersionId pins the run to the exact
-// Playbook/PlaybookVersion it started with (MVP plan's "version pinning"
-// principle) — playbookKey/playbookVersion stay as a denormalized display
-// snapshot, same values as the version's own key/version at the time.
+// Orchestration is real (Temporal — see src/temporal/): starting a run
+// starts a durable Workflow Execution that survives a worker restart,
+// instead of a detached setTimeout. Individual steps still simulate their
+// action (no real connectors yet — see PLAYBOOK_SEED_DATA), but the
+// execution ENGINE itself is real, matching this comment's spirit even
+// though its literal wording predates Temporal. playbookVersionId pins the
+// run to the exact Playbook/PlaybookVersion it started with (MVP plan's
+// "version pinning" principle) — playbookKey/playbookVersion stay as a
+// denormalized display snapshot, same values as the version's own key/
+// version at the time. temporalWorkflowId correlates this row to its
+// Workflow Execution; nullable because rows created before Temporal was
+// wired in (Phase 1 smoke-testing) predate it.
 model PlaybookRun {
   id         BigInt @id @default(autoincrement())
   tenantId   BigInt @map("tenant_id")
@@ -169,11 +212,15 @@ model PlaybookRun {
   playbookKey       String @map("playbook_key") @db.VarChar(100)
   playbookVersion   String @default("1.0") @map("playbook_version") @db.VarChar(20)
 
+  temporalWorkflowId String? @map("temporal_workflow_id") @db.VarChar(255)
+
   state String @default("pending_approval") @db.VarChar(30)
 
-  requiresApproval Boolean   @default(false) @map("requires_approval")
-  approvedBy       BigInt?   @map("approved_by")
-  approvedAt       DateTime? @map("approved_at") @db.Timestamp(6)
+  // Cheap denormalized "does this run need approval at all" flag for list
+  // views — Phase 4 moved the actual gate(s)/decision(s)/expiry to the
+  // Approval table below (one row per gate: the start, and/or individual
+  // steps), which replaces this row's old approvedBy/approvedAt columns.
+  requiresApproval Boolean @default(false) @map("requires_approval")
 
   initiatedBy BigInt    @map("initiated_by")
   startedAt   DateTime? @map("started_at") @db.Timestamp(6)
@@ -185,13 +232,105 @@ model PlaybookRun {
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  incident Incident        @relation(fields: [incidentId], references: [id])
-  version  PlaybookVersion @relation(fields: [playbookVersionId], references: [id])
+  incident       Incident        @relation(fields: [incidentId], references: [id])
+  version        PlaybookVersion @relation(fields: [playbookVersionId], references: [id])
+  stepExecutions StepExecution[]
+  approvals      Approval[]
 
   @@index([tenantId])
   @@index([incidentId])
   @@index([playbookVersionId])
   @@map("incident_playbook_runs")
+}
+
+// A named, reusable approval configuration (MVP plan §5's "action
+// categories classified by impact" — the classification lives on each
+// PlaybookStep/PlaybookVersion via policyKey/startPolicyKey, referencing
+// one of these). timeoutDuration/escalationAfter are Temporal duration
+// strings (e.g. "24 hours") — same format as PLAYBOOK_APPROVAL_TIMEOUT in
+// config/env.ts, consumed the same way inside src/temporal/workflows.ts.
+model Policy {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  key  String @db.VarChar(100)
+  name String @db.VarChar(150)
+
+  timeoutDuration   String  @map("timeout_duration") @db.VarChar(50)
+  escalationAfter   String? @map("escalation_after") @db.VarChar(50)
+  escalationChannel String? @map("escalation_channel") @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("policies")
+}
+
+// One row per approval gate a Temporal workflow execution actually waited
+// on — the playbook-start gate (stepKey null) or an individual step's gate
+// (stepKey set). Written/read exclusively by Activities
+// (src/temporal/activities.ts) and the approvals HTTP API
+// (POST /api/v1/approvals/:id/decision), never directly by playbookRun
+// routes — this is what replaced PlaybookRun.approvedBy/approvedAt.
+model Approval {
+  id BigInt @id @default(autoincrement())
+
+  tenantId      BigInt @map("tenant_id")
+  playbookRunId BigInt @map("playbook_run_id")
+
+  stepKey   String? @map("step_key") @db.VarChar(100)
+  policyKey String  @map("policy_key") @db.VarChar(100)
+
+  requestorUserId BigInt  @map("requestor_user_id")
+  approverUserId  BigInt? @map("approver_user_id")
+
+  decision String @default("pending") @db.VarChar(20)
+
+  requestedAt DateTime  @default(now()) @map("requested_at") @db.Timestamp(6)
+  decidedAt   DateTime? @map("decided_at") @db.Timestamp(6)
+  expiresAt   DateTime? @map("expires_at") @db.Timestamp(6)
+  escalatedAt DateTime? @map("escalated_at") @db.Timestamp(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  playbookRun PlaybookRun @relation(fields: [playbookRunId], references: [id])
+
+  @@index([tenantId])
+  @@index([playbookRunId])
+  @@index([decision])
+  @@map("approvals")
+}
+
+// One row per playbook step actually executed by the Temporal workflow —
+// the per-step audit trail the MVP plan's domain model calls "Step
+// Execution" (mirrored in @responderx/shared's execution.ts). Written by
+// Activities (src/temporal/activities.ts), never directly by an HTTP route.
+model StepExecution {
+  id            BigInt @id @default(autoincrement())
+  tenantId      BigInt @map("tenant_id")
+  playbookRunId BigInt @map("playbook_run_id")
+
+  stepKey  String @map("step_key") @db.VarChar(100)
+  stepName String @map("step_name") @db.VarChar(150)
+  status   String @default("pending") @db.VarChar(20)
+
+  input  Json?   @db.Json
+  output Json?   @db.Json
+  error  String? @db.Text
+
+  attempts Int @default(0)
+
+  startedAt DateTime? @map("started_at") @db.Timestamp(6)
+  endedAt   DateTime? @map("ended_at") @db.Timestamp(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  playbookRun PlaybookRun @relation(fields: [playbookRunId], references: [id])
+
+  @@index([tenantId])
+  @@index([playbookRunId])
+  @@map("step_executions")
 }
 
 // Append-only by convention — no route ever updates or deletes a row here.
@@ -290,6 +429,10 @@ model PlaybookVersion {
 
   version          String  @db.VarChar(20)
   requiresApproval Boolean @default(false) @map("requires_approval")
+  // The Policy (by key) gating this version's run before its first step —
+  // null means no start gate. Individual steps can carry their own
+  // policyKey too (inside `steps`' JSON) for a mid-run gate.
+  startPolicyKey   String? @map("start_policy_key") @db.VarChar(100)
   steps            Json    @default("[]") @db.Json
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)

@@ -34,6 +34,15 @@ app.use(
 );
 
 app.use(
+  "/api/connectors",
+  createProxyMiddleware({
+    target: env.INTEGRATION_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/connectors/" },
+  }),
+);
+
+app.use(
   "/api",
   createProxyMiddleware({
     target: env.IDENTITY_SERVICE_URL,
@@ -46,5 +55,6 @@ app.listen(env.PORT, () => {
   console.log(`api-gateway listening on port ${env.PORT}`);
   console.log(`  /api/v1/*        -> ${env.INCIDENT_SERVICE_URL}`);
   console.log(`  /api/audit-logs* -> ${env.AUDIT_SERVICE_URL}`);
+  console.log(`  /api/connectors* -> ${env.INTEGRATION_SERVICE_URL}`);
   console.log(`  /api/*           -> ${env.IDENTITY_SERVICE_URL}`);
 });

@@ -17,6 +17,10 @@ const TENANT_SCOPED_MODELS = [
   "OutboxEvent",
   "Playbook",
   "PlaybookVersion",
+  "StepExecution",
+  "Policy",
+  "Approval",
+  "Entity",
 ] as const;
 
 export type TenantScopedPrisma = typeof prisma;

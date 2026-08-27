@@ -69,7 +69,7 @@ export async function startPlaybookRun(req: Request, res: Response) {
   res.status(201).json(run);
 }
 
-export async function approvePlaybookRun(req: Request, res: Response) {
+export async function cancelPlaybookRun(req: Request, res: Response) {
   const ids = parseIds(req, res);
   if (!ids || ids.runId === undefined) {
     if (ids) res.status(400).json({ error: "Playbook run id is required" });
@@ -77,19 +77,13 @@ export async function approvePlaybookRun(req: Request, res: Response) {
   }
 
   await incidentService.assertIncidentExists(req.db, ids.incidentId);
-  const run = await playbookRunService.approvePlaybookRun(
-    req.db,
-    req.auth!.tenantId,
-    ids.incidentId,
-    ids.runId,
-    req.auth!.userId,
-  );
+  const run = await playbookRunService.cancelPlaybookRun(req.db, ids.incidentId, ids.runId);
 
   await recordTimelineEvent(req.db, req.auth!.tenantId, {
     incidentId: ids.incidentId,
-    eventType: "playbook_approved",
+    eventType: "playbook_cancel_requested",
     actorUserId: req.auth!.userId,
-    summary: `Playbook "${run.playbookKey}" run approved`,
+    summary: `Playbook "${run.playbookKey}" run cancellation requested`,
     metadata: { runId: run.id.toString() },
   });
 

@@ -20,6 +20,8 @@ export const MODULE_NAMES = {
   // platform operator is granted it explicitly, the same way any other
   // permission is granted — through the existing Roles/Permissions UI.
   TENANTS: "Tenants",
+  CONNECTORS: "Connectors",
+  APPROVALS: "Approvals",
 } as const;
 
 export const ACTION_NAMES = {

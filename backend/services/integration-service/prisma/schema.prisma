@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Catalog row for one connector instance within a tenant. `key` is the
+// stable identifier used in the URL path and in a playbook step's
+// `connector` field (e.g. "slack", "virustotal") — matches a key registered
+// in src/connectors/registry.ts; there is no dynamic/plugin loading in this
+// phase, only the two connectors registry.ts hardcodes.
+model Connector {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  key  String @db.VarChar(50)
+  name String @db.VarChar(150)
+  type String @db.VarChar(50)
+
+  status String @default("disabled") @db.VarChar(20) // enabled | disabled — flips to enabled once credentials are set
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  credential ConnectorCredential?
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("connectors")
+}
+
+// 1:1 with Connector. `encryptedSecret` is an AES-256-GCM ciphertext of a
+// JSON blob (shape depends on the connector — e.g. {botToken} for Slack,
+// {apiKey} for VirusTotal), encrypted with CREDENTIAL_ENCRYPTION_KEY
+// (config/env.ts). This is an explicit, documented stand-in for a real
+// secrets manager (Vault/cloud KMS) — see src/lib/crypto.ts. The secret
+// itself is never returned by any API response; GET /connectors only ever
+// reports whether a credential row exists.
+model ConnectorCredential {
+  id BigInt @id @default(autoincrement())
+
+  tenantId    BigInt @map("tenant_id")
+  connectorId BigInt @unique @map("connector_id")
+
+  // AES-256-GCM: iv + authTag + ciphertext, each base64, colon-joined —
+  // see src/lib/crypto.ts's encrypt()/decrypt().
+  encryptedSecret String @map("encrypted_secret") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  connector Connector @relation(fields: [connectorId], references: [id])
+
+  @@index([tenantId])
+  @@map("connector_credentials")
+}
+
+// Normalized record of every connector action attempt — the
+// @responderx/shared ActionResult shape, persisted. Written for every
+// attempt (success or failure), and is the source row for the audit outbox
+// event below: "every connector call must be audited" (MVP plan §5).
+model ActionResult {
+  id BigInt @id @default(autoincrement())
+
+  tenantId    BigInt @map("tenant_id")
+  connector   String @db.VarChar(50)
+  action      String @db.VarChar(100)
+  requestRef  String? @map("request_ref") @db.VarChar(255)
+
+  status String @db.VarChar(20) // succeeded | failed
+
+  result Json? @db.Json
+  error  String? @db.Text
+  retryable Boolean? // only meaningful when status = failed
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([tenantId])
+  @@index([connector, action])
+  @@map("action_results")
+}
+
+// Transactional outbox: every ActionResult insert happens in the SAME
+// database transaction as its matching OutboxEvent row, so the two can
+// never diverge — identical pattern to incident-service's
+// src/services/outbox.service.ts / outboxPublisher.service.ts.
+model OutboxEvent {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  eventId       String @unique @map("event_id") @db.VarChar(36)
+  eventType     String @map("event_type") @db.VarChar(100)
+  aggregateType String @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String @map("aggregate_id") @db.VarChar(100)
+
+  actorId   String? @map("actor_id") @db.VarChar(100)
+  actorType String  @default("SYSTEM") @map("actor_type") @db.VarChar(20)
+
+  action       String @db.VarChar(50)
+  resourceType String @map("resource_type") @db.VarChar(50)
+  resourceId   String @map("resource_id") @db.VarChar(100)
+
+  metadata Json? @db.Json
+  payload  Json? @db.Json
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamp(6)
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error") @db.Text
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}

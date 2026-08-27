@@ -4,6 +4,7 @@
 // GET /api/auth/me/modules response.
 export const MODULE_NAMES = {
   INCIDENTS: "Incidents",
+  APPROVALS: "Approvals",
 } as const;
 
 export const ACTION_NAMES = {

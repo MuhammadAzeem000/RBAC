@@ -11,6 +11,7 @@ const envSchema = z.object({
   IDENTITY_SERVICE_URL: z.string().url().default("http://localhost:4000"),
   INCIDENT_SERVICE_URL: z.string().url().default("http://localhost:4200"),
   AUDIT_SERVICE_URL: z.string().url().default("http://localhost:4400"),
+  INTEGRATION_SERVICE_URL: z.string().url().default("http://localhost:4300"),
 });
 
 export const env = envSchema.parse(process.env);

@@ -14,3 +14,6 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'notification_db')\gex
 
 SELECT 'CREATE DATABASE audit_db'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'audit_db')\gexec
+
+SELECT 'CREATE DATABASE integration_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'integration_db')\gexec

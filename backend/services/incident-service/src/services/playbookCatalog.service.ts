@@ -1,4 +1,16 @@
+import { PlaybookStep, playbookStepSchema } from "@responderx/shared";
 import { Prisma } from "../generated/prisma/client";
+
+// PlaybookVersion.steps is stored as opaque Json — validated back into the
+// shared PlaybookStep shape here, at the one place every consumer resolves
+// a version through. An empty/malformed array both fall back to `[]`; the
+// caller (playbookRun.service.ts) is what decides an empty list means "run
+// one synthetic step" to preserve pre-Temporal behavior for the seeded
+// playbooks that predate real step data.
+function parseSteps(raw: unknown): PlaybookStep[] {
+  const result = playbookStepSchema.array().safeParse(raw);
+  return result.success ? result.data : [];
+}
 
 // Replaces the old hardcoded PLAYBOOK_CATALOG constant (see
 // constants/incidents.ts, now seed data only) with the real, DB-backed,
@@ -14,6 +26,7 @@ export interface CatalogEntry {
   description: string | null;
   version: string;
   requiresApproval: boolean;
+  startPolicyKey: string | null;
 }
 
 const latestVersionInclude = {
@@ -34,6 +47,7 @@ export async function getCatalog(db: Prisma.TransactionClient): Promise<CatalogE
       description: p.description,
       version: p.versions[0].version,
       requiresApproval: p.versions[0].requiresApproval,
+      startPolicyKey: p.versions[0].startPolicyKey,
     }));
 }
 
@@ -43,6 +57,8 @@ export interface ResolvedPlaybookVersion {
   playbookName: string;
   version: string;
   requiresApproval: boolean;
+  startPolicyKey: string | null;
+  steps: PlaybookStep[];
 }
 
 export async function findLatestVersionByKey(
@@ -62,6 +78,8 @@ export async function findLatestVersionByKey(
     playbookName: playbook.name,
     version: version.version,
     requiresApproval: version.requiresApproval,
+    startPolicyKey: version.startPolicyKey,
+    steps: parseSteps(version.steps),
   };
 }
 
@@ -81,5 +99,7 @@ export async function findVersionById(
     playbookName: version.playbook.name,
     version: version.version,
     requiresApproval: version.requiresApproval,
+    startPolicyKey: version.startPolicyKey,
+    steps: parseSteps(version.steps),
   };
 }
