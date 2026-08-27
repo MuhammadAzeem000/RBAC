@@ -15,6 +15,19 @@ app.get("/health", (_req: Request, res: Response) => {
 // the single authoritative audit-log store now, replacing identity-service's
 // old route of the same path) must be registered before the catch-all
 // "/api" one (identity-service) below, or they'd never be reached.
+// Alert ingestion moved into its own service (Phase 5.1's decomposition
+// slice 1) — its routes share the "/api/v1" prefix with incident-service's,
+// so this more specific mount must be registered first (see the comment
+// above about prefix ordering).
+app.use(
+  "/api/v1/alerts",
+  createProxyMiddleware({
+    target: env.ALERT_INGESTION_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/alerts/" },
+  }),
+);
+
 app.use(
   "/api/v1",
   createProxyMiddleware({
@@ -53,6 +66,7 @@ app.use(
 
 app.listen(env.PORT, () => {
   console.log(`api-gateway listening on port ${env.PORT}`);
+  console.log(`  /api/v1/alerts/* -> ${env.ALERT_INGESTION_SERVICE_URL}`);
   console.log(`  /api/v1/*        -> ${env.INCIDENT_SERVICE_URL}`);
   console.log(`  /api/audit-logs* -> ${env.AUDIT_SERVICE_URL}`);
   console.log(`  /api/connectors* -> ${env.INTEGRATION_SERVICE_URL}`);

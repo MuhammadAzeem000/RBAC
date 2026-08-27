@@ -11,7 +11,6 @@ export const ROUTING_KEYS = {
   ASSIGNED: "incident.assigned",
   STATUS_CHANGED: "incident.status_changed",
   SEVERITY_CHANGED: "incident.severity_changed",
-  ALERT_ATTACHED: "incident.alert_attached",
   TASK_CREATED: "incident.task_created",
   TASK_COMPLETED: "incident.task_completed",
   EVIDENCE_ADDED: "incident.evidence_added",

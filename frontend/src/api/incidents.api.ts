@@ -4,7 +4,6 @@ import type { PaginatedResult } from '@/types/pagination'
 import type {
   CreateIncidentInput,
   Incident,
-  IncidentAlert,
   IncidentComment,
   IncidentEvidence,
   IncidentListQuery,
@@ -28,11 +27,6 @@ export const incidentsApi = {
   update: (id: string, input: UpdateIncidentInput) =>
     api.patch<Incident>(`${base}/${id}`, input).then((r) => r.data),
   remove: (id: string) => api.delete(`${base}/${id}`).then((r) => r.data),
-
-  listAlerts: (id: string) =>
-    api.get<{ data: IncidentAlert[] }>(`${base}/${id}/alerts`).then((r) => r.data.data),
-  attachAlert: (id: string, input: { externalAlertId: string; source: string; summary: string }) =>
-    api.post<IncidentAlert>(`${base}/${id}/alerts`, input).then((r) => r.data),
 
   listComments: (id: string) =>
     api.get<{ data: IncidentComment[] }>(`${base}/${id}/comments`).then((r) => r.data.data),

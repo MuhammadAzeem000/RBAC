@@ -8,7 +8,6 @@ import { prisma } from "../config/prisma";
 // scoped too, since each tenant has its own playbook catalog.
 const TENANT_SCOPED_MODELS = [
   "Incident",
-  "Alert",
   "Task",
   "Evidence",
   "Comment",
@@ -20,7 +19,6 @@ const TENANT_SCOPED_MODELS = [
   "StepExecution",
   "Policy",
   "Approval",
-  "Entity",
 ] as const;
 
 export type TenantScopedPrisma = typeof prisma;

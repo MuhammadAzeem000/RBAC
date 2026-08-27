@@ -68,15 +68,47 @@ export interface IncidentListQuery {
   search?: string
 }
 
+// alert-ingestion-service's response shape (Phase 5.1's decomposition —
+// alerts no longer live in incident-service). status distinguishes the
+// synchronous human attach path ('attached') from the async
+// ingest-and-create-a-case saga ('pending_case' -> 'linked', or 'failed').
+export type AlertStatus = 'pending_case' | 'linked' | 'attached' | 'failed'
+
+export interface AlertEntity {
+  id: string
+  type: string
+  value: string
+  confidence: number | null
+  attributes: unknown
+}
+
 export interface IncidentAlert {
   id: string
-  incidentId: string
   externalAlertId: string
   source: string
-  summary: string
-  rawPayload: unknown
+  summary: string | null
+  severity: IncidentSeverity | null
+  occurredAt: string | null
+  rawRef: string | null
+  status: AlertStatus
+  incidentId: string | null
+  errorMessage: string | null
   attachedBy: string
   attachedAt: string
+  entities: AlertEntity[]
+}
+
+// The human "attach a related alert to an incident I already have open"
+// path — a synchronous subset of alert-ingestion-service's full ingest
+// request shape (source/externalId/severity/timestamp/entities/rawRef),
+// with incidentId set so it resolves synchronously instead of going through
+// the async ingest-and-create-a-case saga.
+export interface AttachAlertInput {
+  source: string
+  externalId: string
+  severity: IncidentSeverity
+  timestamp: string
+  incidentId: string
 }
 
 export type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'

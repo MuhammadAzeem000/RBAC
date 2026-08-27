@@ -2,11 +2,24 @@ import amqplib, { ConfirmChannel } from "amqplib";
 import { env } from "../config/env";
 import { prisma } from "../config/prisma";
 import { AUDIT_EXCHANGE } from "../events/auditTopology";
+import {
+  ALERT_EXCHANGE,
+  INCIDENT_CREATED_FOR_ALERT_ROUTING_KEY,
+  INCIDENT_CREATE_FAILED_ROUTING_KEY,
+} from "../events/alertTopology";
 
 const SERVICE_NAME = "incident-service";
 const POLL_INTERVAL_MS = 2000;
 const BATCH_SIZE = 20;
 const CONNECT_RETRY_DELAY_MS = 5000;
+
+// Event types that are the reply half of the incident-creation saga, not
+// just the audit trail — see the dual-publish comment in publishBatch()
+// below. Mirrors alert-ingestion-service's own SAGA_EVENT_ROUTING_KEYS.
+const SAGA_EVENT_ROUTING_KEYS: Record<string, string> = {
+  INCIDENT_CREATED_FOR_ALERT: INCIDENT_CREATED_FOR_ALERT_ROUTING_KEY,
+  INCIDENT_CREATE_FAILED: INCIDENT_CREATE_FAILED_ROUTING_KEY,
+};
 
 let confirmChannel: ConfirmChannel | null = null;
 let connecting = false;
@@ -30,6 +43,7 @@ async function connectPublisher(): Promise<void> {
       const connection = await amqplib.connect(env.RABBITMQ_URL);
       const channel = await connection.createConfirmChannel();
       await channel.assertExchange(AUDIT_EXCHANGE, "topic", { durable: true });
+      await channel.assertExchange(ALERT_EXCHANGE, "topic", { durable: true });
 
       confirmChannel = channel;
       connection.on("close", () => {
@@ -91,9 +105,9 @@ async function claimBatch(): Promise<ClaimedRow[]> {
   });
 }
 
-function publishConfirmed(channel: ConfirmChannel, routingKey: string, body: Buffer): Promise<void> {
+function publishConfirmed(channel: ConfirmChannel, exchange: string, routingKey: string, body: Buffer): Promise<void> {
   return new Promise((resolve, reject) => {
-    channel.publish(AUDIT_EXCHANGE, routingKey, body, { persistent: true, contentType: "application/json" }, (err) => {
+    channel.publish(exchange, routingKey, body, { persistent: true, contentType: "application/json" }, (err) => {
       if (err) reject(err);
       else resolve();
     });
@@ -120,9 +134,22 @@ async function publishBatch(): Promise<void> {
       payload: row.payload ?? undefined,
     };
     const routingKey = `${SERVICE_NAME}.${row.resource_type.toLowerCase()}.${row.action.toLowerCase()}`;
+    const body = Buffer.from(JSON.stringify(message));
 
     try {
-      await publishConfirmed(confirmChannel, routingKey, Buffer.from(JSON.stringify(message)));
+      await publishConfirmed(confirmChannel, AUDIT_EXCHANGE, routingKey, body);
+
+      // One outbox row, fanned out to a second exchange for the specific
+      // event types the incident-creation saga's reply half depends on —
+      // same durable row, same confirm-channel guarantee, same
+      // retry-on-failure below (if EITHER publish throws, the row stays
+      // unpublished and the whole thing is retried next poll — never marked
+      // done with only one side delivered).
+      const sagaRoutingKey = SAGA_EVENT_ROUTING_KEYS[row.event_type];
+      if (sagaRoutingKey) {
+        await publishConfirmed(confirmChannel, ALERT_EXCHANGE, sagaRoutingKey, body);
+      }
+
       await prisma.outboxEvent.update({ where: { id: row.id }, data: { publishedAt: new Date(), lastError: null } });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

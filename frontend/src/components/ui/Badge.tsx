@@ -78,3 +78,20 @@ const INCIDENT_STATUS_LABEL: Record<string, string> = {
 export function IncidentStatusBadge({ status }: { status: string }) {
   return <Badge tone={INCIDENT_STATUS_TONE[status] ?? 'slate'}>{INCIDENT_STATUS_LABEL[status] ?? status}</Badge>
 }
+
+const ALERT_STATUS_TONE: Record<string, Tone> = {
+  pending_case: 'amber',
+  linked: 'green',
+  attached: 'green',
+  failed: 'red',
+}
+const ALERT_STATUS_LABEL: Record<string, string> = {
+  pending_case: 'Pending case',
+  linked: 'Linked',
+  attached: 'Attached',
+  failed: 'Failed',
+}
+
+export function AlertStatusBadge({ status }: { status: string }) {
+  return <Badge tone={ALERT_STATUS_TONE[status] ?? 'slate'}>{ALERT_STATUS_LABEL[status] ?? status}</Badge>
+}

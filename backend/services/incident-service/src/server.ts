@@ -9,9 +9,9 @@ import { connectEventBus } from "./events/eventBus.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { approvalRouter } from "./routes/approval.routes";
 import { incidentRouter } from "./routes/incident.routes";
-import { ingestionRouter } from "./routes/ingestion.routes";
 import { notFound } from "./middlewares/notFound";
 import { startOutboxPublisher } from "./services/outboxPublisher.service";
+import { connectAlertConsumer } from "./events/alertConsumer";
 import { startPlaybookWorker } from "./temporal/worker";
 
 const app = express();
@@ -38,11 +38,6 @@ app.use("/api/v1/incidents", authenticate, tenantContext, incidentRouter);
 // POST /:id/playbook-runs/:runId/approve — see routes/approval.routes.ts.
 app.use("/api/v1/approvals", authenticate, tenantContext, approvalRouter);
 
-// Phase 5: the plan's documented POST /alerts ingestion surface — a real
-// alert becomes a Case automatically, distinct from the human-driven
-// POST /:id/alerts (attach) nested under incidentRouter above.
-app.use("/api/v1/alerts", authenticate, tenantContext, ingestionRouter);
-
 app.use(notFound);
 app.use(errorHandler);
 
@@ -55,9 +50,14 @@ app.listen(PORT, () => {
 // from accepting requests.
 void connectEventBus();
 
-// Delivers this service's transactional-outbox rows to audit-service —
+// Delivers this service's transactional-outbox rows to audit-service (and,
+// for the reply half of the incident-creation saga, to alert.events too) —
 // independent of connectEventBus() above; audit events are not domain events.
 startOutboxPublisher();
+
+// Inbound half of the incident-creation saga — alert-ingestion-service's
+// ALERT_INGESTED events. See events/alertConsumer.ts.
+void connectAlertConsumer();
 
 // Durable playbook-run execution — see src/temporal/. Runs its own
 // reconnect loop (like connectEventBus above), so a slow-starting or

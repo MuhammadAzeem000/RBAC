@@ -266,6 +266,45 @@ services:
     ports:
       - "4300:4300"
 
+  # Phase 5.1's decomposition slice 1 — owns all alert/entity data (both the
+  # human attach path and the automated ingest-and-create-a-case path) and
+  # hands case creation off to incident-service via an event-driven saga over
+  # RabbitMQ's alert.events exchange (see src/events/alertTopology.ts in both
+  # services). See backend/services/alert-ingestion-service.
+  alert-ingestion-service:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
+    volumes:
+      - ./backend/services/alert-ingestion-service:/app
+      - alert_ingestion_dev_node_modules:/app/node_modules
+      - ./backend/shared:/shared
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_started
+      incident-service:
+        condition: service_started
+    environment:
+      PORT: 4500
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: alert_ingestion_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      INCIDENT_SERVICE_URL: http://incident-service:4200
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4500:4500"
+
   # No healthcheck on the services above (a bare node:20-alpine image has
   # no wget/curl without an extra apk add), so downstream depends_on here use
   # service_started, not service_healthy — identity-service/incident-service/
@@ -287,12 +326,14 @@ services:
       - incident-service
       - audit-service
       - integration-service
+      - alert-ingestion-service
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
       INCIDENT_SERVICE_URL: http://incident-service:4200
       AUDIT_SERVICE_URL: http://audit-service:4400
       INTEGRATION_SERVICE_URL: http://integration-service:4300
+      ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500
     ports:
       - "8090:8000"
 
@@ -350,6 +391,7 @@ volumes:
   incident_dev_node_modules:
   audit_dev_node_modules:
   integration_dev_node_modules:
+  alert_ingestion_dev_node_modules:
   gateway_dev_node_modules:
   notification_dev_node_modules:
   frontend_dev_node_modules:

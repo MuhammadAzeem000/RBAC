@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Owns every alert, however it arrived — the human "attach a related alert
+// to an incident I already have open" path (status: attached, set
+// synchronously) and the automated ingest-and-create-a-case path (status:
+// pending_case -> linked, set asynchronously once incident-service's saga
+// reply arrives; see events/alertConsumer.ts... no — the CONSUMER lives on
+// this side too, consuming the REPLY, not the request. See
+// src/events/consumer.ts). incidentId has no FK — Incident lives in a
+// different service's database now (incident-service), reached only by id.
+// @@unique is the concrete dedup mechanism: the same (source, externalId)
+// arriving twice returns the existing row instead of creating a second one.
+model Alert {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+
+  externalAlertId String  @map("external_alert_id") @db.VarChar(150)
+  source          String  @db.VarChar(100)
+  summary         String? @db.Text
+
+  severity   String?   @db.VarChar(20)
+  occurredAt DateTime? @map("occurred_at") @db.Timestamp(6)
+  rawRef     String?   @map("raw_ref") @db.VarChar(500)
+
+  status       String  @default("pending_case") @db.VarChar(20)
+  incidentId   BigInt? @map("incident_id")
+  errorMessage String? @map("error_message") @db.Text
+
+  attachedBy BigInt   @map("attached_by")
+  attachedAt DateTime @default(now()) @map("attached_at") @db.Timestamp(6)
+
+  entities Entity[]
+
+  @@unique([tenantId, source, externalAlertId])
+  @@index([tenantId])
+  @@index([incidentId])
+  @@map("alerts")
+}
+
+model Entity {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+  alertId  BigInt @map("alert_id")
+
+  type       String  @db.VarChar(30)
+  value      String  @db.VarChar(500)
+  confidence Float?
+  attributes Json?   @db.Json
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  alert Alert @relation(fields: [alertId], references: [id])
+
+  @@index([tenantId])
+  @@index([alertId])
+  @@map("entities")
+}
+
+// Transactional outbox — identical pattern to every other service since
+// Phase 1. outboxPublisher.service.ts fans this out to BOTH audit.events
+// (always, for the central audit trail) and alert.events (for the
+// ALERT_INGESTED saga event specifically) — see its own comment.
+model OutboxEvent {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  eventId       String @unique @map("event_id") @db.VarChar(36)
+  eventType     String @map("event_type") @db.VarChar(100)
+  aggregateType String @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String @map("aggregate_id") @db.VarChar(100)
+
+  actorId   String? @map("actor_id") @db.VarChar(100)
+  actorType String  @default("USER") @map("actor_type") @db.VarChar(20)
+
+  action       String @db.VarChar(50)
+  resourceType String @map("resource_type") @db.VarChar(50)
+  resourceId   String @map("resource_id") @db.VarChar(100)
+
+  metadata Json? @db.Json
+  payload  Json? @db.Json
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamp(6)
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error") @db.Text
+
+  @@index([publishedAt])
+  @@index([tenantId])
+  @@map("outbox_events")
+}

@@ -5,7 +5,7 @@
 -- server. If you're adding this to an ALREADY-initialized volume, this
 -- script won't run automatically — create the databases manually instead:
 --   docker exec <postgres-container> psql -U <user> -d rbac_db -c "CREATE DATABASE incident_db;"
---   (repeat for notification_db, audit_db)
+--   (repeat for notification_db, audit_db, integration_db, alert_ingestion_db)
 SELECT 'CREATE DATABASE incident_db'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'incident_db')\gexec
 
@@ -17,3 +17,6 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'audit_db')\gexec
 
 SELECT 'CREATE DATABASE integration_db'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'integration_db')\gexec
+
+SELECT 'CREATE DATABASE alert_ingestion_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'alert_ingestion_db')\gexec

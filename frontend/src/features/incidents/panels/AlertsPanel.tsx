@@ -1,39 +1,42 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { useState } from 'react'
-import { incidentsApi } from '@/api/incidents.api'
+import { alertsApi } from '@/api/alerts.api'
 import { Button } from '@/components/ui/Button'
+import { AlertStatusBadge, SeverityBadge } from '@/components/ui/Badge'
 import { Dialog } from '@/components/ui/Dialog'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { FormField } from '@/components/ui/FormField'
 import { Input } from '@/components/ui/Input'
+import { Select } from '@/components/ui/Select'
 import { Spinner } from '@/components/ui/Spinner'
-import { Textarea } from '@/components/ui/Textarea'
 import { useMyPermissions } from '@/hooks/useMyModules'
 import { getErrorMessage } from '@/lib/errors'
 import { toast } from '@/stores/toastStore'
+import type { IncidentSeverity } from '@/types/incident'
 
 export function AlertsPanel({ incidentId }: { incidentId: string }) {
   const queryClient = useQueryClient()
   const { can } = useMyPermissions()
   const canManage = can('Incidents', 'Update')
   const [open, setOpen] = useState(false)
-  const [externalAlertId, setExternalAlertId] = useState('')
+  const [externalId, setExternalId] = useState('')
   const [source, setSource] = useState('')
-  const [summary, setSummary] = useState('')
+  const [severity, setSeverity] = useState<IncidentSeverity>('medium')
 
   const query = useQuery({
     queryKey: ['incidents', incidentId, 'alerts'],
-    queryFn: () => incidentsApi.listAlerts(incidentId),
+    queryFn: () => alertsApi.listForIncident(incidentId),
   })
 
   const attachMutation = useMutation({
-    mutationFn: () => incidentsApi.attachAlert(incidentId, { externalAlertId, source, summary }),
+    mutationFn: () =>
+      alertsApi.attach({ source, externalId, severity, timestamp: new Date().toISOString(), incidentId }),
     onSuccess: () => {
-      setExternalAlertId('')
+      setExternalId('')
       setSource('')
-      setSummary('')
+      setSeverity('medium')
       setOpen(false)
       queryClient.invalidateQueries({ queryKey: ['incidents', incidentId, 'alerts'] })
       queryClient.invalidateQueries({ queryKey: ['incidents', incidentId, 'timeline'] })
@@ -69,9 +72,18 @@ export function AlertsPanel({ incidentId }: { incidentId: string }) {
             <li key={alert.id} className="rounded-md border border-slate-200 px-3 py-2.5">
               <div className="mb-1 flex items-center justify-between">
                 <p className="text-sm font-medium text-slate-800">{alert.externalAlertId}</p>
-                <span className="text-xs text-slate-400">{alert.source}</span>
+                <div className="flex items-center gap-1.5">
+                  {alert.severity && <SeverityBadge severity={alert.severity} />}
+                  <AlertStatusBadge status={alert.status} />
+                </div>
               </div>
-              <p className="text-sm text-slate-600">{alert.summary}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-slate-600">{alert.summary ?? 'No summary available.'}</p>
+                <span className="whitespace-nowrap text-xs text-slate-400">{alert.source}</span>
+              </div>
+              {alert.status === 'failed' && alert.errorMessage && (
+                <p className="mt-1 text-xs text-red-600">{alert.errorMessage}</p>
+              )}
             </li>
           ))}
         </ul>
@@ -80,13 +92,20 @@ export function AlertsPanel({ incidentId }: { incidentId: string }) {
       <Dialog open={open} onClose={() => setOpen(false)} title="Attach alert" size="sm">
         <div className="flex flex-col gap-3">
           <FormField label="External alert ID" required>
-            {(id) => <Input id={id} value={externalAlertId} onChange={(e) => setExternalAlertId(e.target.value)} />}
+            {(id) => <Input id={id} value={externalId} onChange={(e) => setExternalId(e.target.value)} />}
           </FormField>
           <FormField label="Source" required>
             {(id) => <Input id={id} value={source} onChange={(e) => setSource(e.target.value)} placeholder="e.g. SIEM" />}
           </FormField>
-          <FormField label="Summary" required>
-            {(id) => <Textarea id={id} rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} />}
+          <FormField label="Severity" required>
+            {(id) => (
+              <Select id={id} value={severity} onChange={(e) => setSeverity(e.target.value as IncidentSeverity)}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </Select>
+            )}
           </FormField>
         </div>
         <div className="mt-4 flex justify-end gap-2">
@@ -95,7 +114,7 @@ export function AlertsPanel({ incidentId }: { incidentId: string }) {
           </Button>
           <Button
             variant="primary"
-            disabled={!externalAlertId.trim() || !source.trim() || !summary.trim()}
+            disabled={!externalId.trim() || !source.trim()}
             loading={attachMutation.isPending}
             onClick={() => attachMutation.mutate()}
           >

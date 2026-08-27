@@ -259,11 +259,53 @@ services:
       retries: 10
       start_period: 10s
 
+  # Phase 5.1's decomposition slice 1 — owns all alert/entity data (both the
+  # human attach path and the automated ingest-and-create-a-case path) and
+  # hands case creation off to incident-service via an event-driven saga over
+  # RabbitMQ's alert.events exchange (see src/events/alertTopology.ts in both
+  # services). See backend/services/alert-ingestion-service.
+  alert-ingestion-service:
+    build:
+      context: .
+      dockerfile: backend/services/alert-ingestion-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      incident-service:
+        condition: service_healthy
+    environment:
+      PORT: 4500
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: alert_ingestion_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      INCIDENT_SERVICE_URL: http://incident-service:4200
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4500:4500"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4500/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   # Reverse proxy: the single origin the frontend talks to. Routes
-  # "/api/v1/*" (incident-service's documented REST surface),
-  # "/api/audit-logs*" (audit-service, the single authoritative audit-log
-  # store), and "/api/connectors*" (integration-service) to their respective
-  # services, and everything else under "/api" to identity-service.
+  # "/api/v1/alerts*" (alert-ingestion-service) and the rest of "/api/v1/*"
+  # (incident-service's documented REST surface), "/api/audit-logs*"
+  # (audit-service, the single authoritative audit-log store), and
+  # "/api/connectors*" (integration-service) to their respective services,
+  # and everything else under "/api" to identity-service.
   api-gateway:
     build:
       context: .
@@ -278,12 +320,15 @@ services:
         condition: service_healthy
       integration-service:
         condition: service_healthy
+      alert-ingestion-service:
+        condition: service_healthy
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
       INCIDENT_SERVICE_URL: http://incident-service:4200
       AUDIT_SERVICE_URL: http://audit-service:4400
       INTEGRATION_SERVICE_URL: http://integration-service:4300
+      ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500
     ports:
       - "8090:8000"
 

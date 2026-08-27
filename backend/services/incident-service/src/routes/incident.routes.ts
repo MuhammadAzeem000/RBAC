@@ -1,5 +1,4 @@
 import { Router } from "express";
-import * as alertController from "../controllers/alert.controller";
 import * as commentController from "../controllers/comment.controller";
 import * as evidenceController from "../controllers/evidence.controller";
 import * as incidentController from "../controllers/incident.controller";
@@ -25,9 +24,6 @@ incidentRouter.get("/", canView, asyncHandler(incidentController.listIncidents))
 incidentRouter.get("/:id", canView, asyncHandler(incidentController.getIncidentById));
 incidentRouter.patch("/:id", canUpdate, asyncHandler(incidentController.updateIncident));
 incidentRouter.delete("/:id", canDelete, asyncHandler(incidentController.deleteIncident));
-
-incidentRouter.post("/:id/alerts", canUpdate, asyncHandler(alertController.attachAlert));
-incidentRouter.get("/:id/alerts", canView, asyncHandler(alertController.listAlerts));
 
 incidentRouter.post("/:id/comments", canUpdate, asyncHandler(commentController.createComment));
 incidentRouter.get("/:id/comments", canView, asyncHandler(commentController.listComments));
