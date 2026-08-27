@@ -28,6 +28,10 @@ const envSchema = z.object({
   // it failed. Overridable per-environment so the expiry path is testable
   // without waiting a real day.
   PLAYBOOK_APPROVAL_TIMEOUT: z.string().min(1).default("24 hours"),
+  // Phase 3: the connector runtime a real (non-simulated) playbook step
+  // calls — see temporal/activities.ts's runStep.
+  INTEGRATION_SERVICE_URL: z.string().url().default("http://localhost:4300"),
+  INTEGRATION_SERVICE_TOKEN: z.string().min(16),
 });
 
 const parsed = envSchema.parse(process.env);

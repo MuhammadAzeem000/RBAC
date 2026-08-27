@@ -51,10 +51,34 @@ const FILTER_OPERATIONS = new Set([
   "deleteMany",
 ]);
 
-const UNIQUE_KEYED_OPERATIONS = new Set(["update", "delete", "findUnique", "findUniqueOrThrow", "upsert"]);
+// "upsert" is handled by its own branch above, not here — a missing row is
+// its legitimate create-path, not a "not found" error like the rest of these.
+const UNIQUE_KEYED_OPERATIONS = new Set(["update", "delete", "findUnique", "findUniqueOrThrow"]);
 
 function mergeWhere(args: AnyRecord, tenantId: string): AnyRecord {
   return { ...args, where: { ...(args.where as AnyRecord | undefined), tenantId } };
+}
+
+// A Prisma `WhereUniqueInput` (what upsert/update/delete/findUnique take)
+// represents a compound unique constraint as a nested wrapper —
+// `{ tenantId_key: { tenantId, key } }` — which is NOT valid syntax for a
+// filter-style `where` like findFirst's; findFirst needs the compound
+// field's own members flattened to the top level instead:
+// `{ tenantId, key }`. WhereUniqueInput can only ever contain direct scalar
+// equality or exactly this compound-wrapper shape — never a filter operator
+// object like `{ gt: 5 }` — so flattening every nested plain-object value
+// unconditionally is safe here (this must NOT be reused against a general
+// filter `where`, only against a WhereUniqueInput being adapted into one).
+function flattenUniqueWhere(where: AnyRecord | undefined): AnyRecord {
+  const flattened: AnyRecord = {};
+  for (const [key, value] of Object.entries(where ?? {})) {
+    if (value !== null && typeof value === "object" && !(value instanceof Date) && !Array.isArray(value)) {
+      Object.assign(flattened, value as AnyRecord);
+    } else {
+      flattened[key] = value;
+    }
+  }
+  return flattened;
 }
 
 function stampCreateData(args: AnyRecord, tenantId: string): AnyRecord {
@@ -105,18 +129,35 @@ export function forTenant<TClient extends ExtendableClient>(
           return query(stampCreateData(args, tenantIdValue));
         }
 
+        if (operation === "upsert") {
+          // Unlike update/delete/findUnique below, a missing row here is
+          // the legitimate create-path, not an error — throwing "not
+          // found" would break upsert's entire reason for existing. Only
+          // check ownership when a row DOES already exist (its `where`
+          // matched something), so a cross-tenant id can't be upserted
+          // into; a genuinely new row just gets tenantId stamped and created.
+          const delegate = (client as unknown as AnyRecord)[clientProperty(model)] as {
+            findFirst: (a: AnyRecord) => Promise<AnyRecord | null>;
+          };
+          const existing = await delegate.findFirst({ where: flattenUniqueWhere(args.where as AnyRecord) });
+          if (existing && existing.tenantId?.toString() !== tenantIdValue) {
+            throw new Error(`${model} not found`);
+          }
+          if (args.create) {
+            args = { ...args, create: { ...(args.create as AnyRecord), tenantId: tenantIdValue } };
+          }
+          return query(args);
+        }
+
         if (UNIQUE_KEYED_OPERATIONS.has(operation)) {
           const delegate = (client as unknown as AnyRecord)[clientProperty(model)] as {
             findFirst: (a: AnyRecord) => Promise<unknown>;
           };
           const owned = await delegate.findFirst({
-            where: { ...(args.where as AnyRecord | undefined), tenantId: tenantIdValue },
+            where: { ...flattenUniqueWhere(args.where as AnyRecord), tenantId: tenantIdValue },
           });
           if (!owned) {
             throw new Error(`${model} not found`);
-          }
-          if (operation === "upsert" && args.create) {
-            args = { ...args, create: { ...(args.create as AnyRecord), tenantId: tenantIdValue } };
           }
           return query(args);
         }

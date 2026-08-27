@@ -28,10 +28,16 @@ export type PlaybookRunState = (typeof PLAYBOOK_RUN_STATES)[number];
 // tenant's starting catalog, and services/playbookCatalog.service.ts, which
 // serves it). `requiresApproval` drives the spec's "explicit
 // confirmation/approval for actions marked destructive or high risk" rule.
-// `steps` are still simulated actions (no real connectors yet — that's a
-// later phase) but now run as real, individually-retried, individually-
-// audited Temporal Activities (see src/temporal/) instead of one opaque
-// timer — each step becomes its own StepExecution row.
+// Most `steps` are still simulated actions (no real connector bound) but
+// now run as real, individually-retried, individually-audited Temporal
+// Activities (see src/temporal/) instead of one opaque timer — each step
+// becomes its own StepExecution row. `enrich-ioc`'s last two steps ARE real
+// (Phase 3): they set `connector`/`action` and execute through
+// integration-service's connector runtime against the live Slack/VirusTotal
+// APIs — see temporal/activities.ts's runStep(). The VirusTotal lookup
+// targets a fixed demo IP (8.8.8.8) since there's no real alert-entity
+// pipeline binding a step's params to an actual incident's indicators yet
+// — a later phase's work, not this one's.
 export const PLAYBOOK_SEED_DATA = [
   {
     key: "enrich-ioc",
@@ -42,6 +48,20 @@ export const PLAYBOOK_SEED_DATA = [
       { key: "lookup-ip-reputation", name: "Look up IP reputation", config: {} },
       { key: "lookup-domain-reputation", name: "Look up domain reputation", config: {} },
       { key: "lookup-file-hash-reputation", name: "Look up file hash reputation", config: {} },
+      {
+        key: "lookup-ip-virustotal",
+        name: "Look up IP reputation via VirusTotal",
+        connector: "virustotal",
+        action: "lookupIp",
+        config: { ip: "8.8.8.8" },
+      },
+      {
+        key: "notify-soc-slack",
+        name: "Notify SOC via Slack",
+        connector: "slack",
+        action: "postMessage",
+        config: { channel: "#soc-alerts", text: "Enrich-IOC playbook completed — see incident for details." },
+      },
     ],
   },
   {

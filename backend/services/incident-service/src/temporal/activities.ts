@@ -5,7 +5,9 @@
 // pattern the pre-Temporal setTimeout-based scheduleSimulatedCompletion()
 // used — activities, like that old detached timer, run with no req/req.db
 // to inherit.
-import { forTenant, PlaybookStep } from "@responderx/shared";
+import { ApplicationFailure } from "@temporalio/common";
+import { ConnectorActionResponse, forTenant, PlaybookStep } from "@responderx/shared";
+import { env } from "../config/env";
 import { prisma } from "../config/prisma";
 import { Prisma } from "../generated/prisma/client";
 import { writeOutboxEvent } from "../services/outbox.service";
@@ -95,18 +97,61 @@ export async function recordStepResult(stepExecutionId: string, tenantId: string
     data: {
       status: outcome.error ? "failed" : "succeeded",
       output: outcome.output ? (outcome.output as Prisma.InputJsonValue) : undefined,
+      error: outcome.error,
       endedAt: new Date(),
     },
   });
 }
 
-// Still simulated — no real connectors exist yet (a later phase). What's
-// real now is that this runs as an individually retried, individually
-// timed-out, individually observable Temporal Activity instead of being
-// baked into one opaque setTimeout for the whole run.
-export async function runSimulatedStep(step: PlaybookStep): Promise<Record<string, unknown>> {
-  await new Promise((resolve) => setTimeout(resolve, 800));
-  return { message: `${step.name} completed successfully (simulated).` };
+// A step with no connector/action bound to it (every playbook step before
+// Phase 3, and any step that genuinely doesn't need a real integration)
+// still runs simulated — this branch is otherwise unchanged from before
+// Phase 3. A step WITH connector/action calls the real connector runtime
+// (integration-service) instead: still runs as this same individually
+// retried, individually timed-out, individually observable Temporal
+// Activity, just doing real work now instead of a setTimeout.
+export async function runStep(step: PlaybookStep, tenantId: string): Promise<Record<string, unknown>> {
+  if (!step.connector || !step.action) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return { message: `${step.name} completed successfully (simulated).` };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${env.INTEGRATION_SERVICE_URL}/api/connectors/${step.connector}/actions/${step.action}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Service-Token": env.INTEGRATION_SERVICE_TOKEN },
+        body: JSON.stringify({ tenantId, params: step.config }),
+      },
+    );
+  } catch (error) {
+    // Network-level failure (integration-service unreachable, timeout) —
+    // transient by nature, let Temporal's own retry policy on this
+    // Activity (see workflows.ts's proxyActivities config) handle it.
+    throw new Error(`Connector runtime unreachable: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (!response.ok) {
+    // A request-level failure from integration-service itself (unknown
+    // connector/action, no credentials configured, bad service token) —
+    // these are deterministic misconfigurations, not something a retry
+    // fixes, so Temporal shouldn't burn its retry budget on them.
+    const body = await response.text();
+    throw ApplicationFailure.nonRetryable(`Connector runtime error (HTTP ${response.status}): ${body}`);
+  }
+
+  const body = (await response.json()) as ConnectorActionResponse;
+  if (!body.ok) {
+    const message = body.error?.message ?? "Connector action failed";
+    if (body.error?.retryable === false) {
+      throw ApplicationFailure.nonRetryable(message);
+    }
+    throw new Error(message);
+  }
+
+  return body.result ?? {};
 }
 
 export async function markSucceeded(runId: string, tenantId: string, incidentId: string, summary: string): Promise<void> {

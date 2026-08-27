@@ -16,6 +16,7 @@ const MODULES = [
   { name: MODULE_NAMES.PERMISSIONS, sortOrder: 6 },
   { name: MODULE_NAMES.AUDIT_LOGS, sortOrder: 7 },
   { name: MODULE_NAMES.INCIDENTS, sortOrder: 8 },
+  { name: MODULE_NAMES.CONNECTORS, sortOrder: 10 },
 ] as const;
 
 const ACTIONS = [

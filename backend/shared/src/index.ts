@@ -3,6 +3,7 @@ export * from "./types/entity";
 export * from "./types/alert";
 export * from "./types/case";
 export * from "./types/playbook";
+export * from "./types/connector";
 export * from "./types/execution";
 export * from "./types/approval";
 export * from "./prisma/tenantScope";

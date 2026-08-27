@@ -17,7 +17,7 @@ const {
   recordApproval,
   recordStepStart,
   recordStepResult,
-  runSimulatedStep,
+  runStep,
   markSucceeded,
   markFailed,
   markCancelled,
@@ -27,6 +27,21 @@ const {
 });
 
 const SYNTHETIC_STEP = { key: "simulated-completion", name: "Run playbook", config: {} };
+
+// Temporal wraps an Activity's thrown error in an ActivityFailure whose own
+// .message is a generic "Activity task failed" — the real message (e.g. a
+// connector's actual error text) lives on .cause, possibly nested more than
+// one level deep. Walks to the deepest cause so markFailed/recordStepResult
+// record something an operator can actually act on, not a generic wrapper.
+function describeError(error: unknown): string {
+  let current: Error | undefined = error instanceof Error ? error : undefined;
+  let message = current?.message ?? String(error);
+  while (current?.cause instanceof Error) {
+    current = current.cause;
+    message = current.message;
+  }
+  return message;
+}
 
 export async function playbookRunWorkflow(input: PlaybookRunWorkflowInput): Promise<void> {
   let approved = !input.requiresApproval;
@@ -58,22 +73,15 @@ export async function playbookRunWorkflow(input: PlaybookRunWorkflowInput): Prom
     for (const step of steps) {
       const stepExecutionId = await recordStepStart(input.runId, input.tenantId, input.incidentId, step);
       try {
-        const output = await runSimulatedStep(step);
+        const output = await runStep(step, input.tenantId);
         await recordStepResult(stepExecutionId, input.tenantId, { output });
       } catch (error) {
-        await recordStepResult(stepExecutionId, input.tenantId, {
-          error: error instanceof Error ? error.message : String(error),
-        });
+        await recordStepResult(stepExecutionId, input.tenantId, { error: describeError(error) });
         throw error;
       }
     }
 
-    await markSucceeded(
-      input.runId,
-      input.tenantId,
-      input.incidentId,
-      `${input.playbookName} completed successfully (simulated).`,
-    );
+    await markSucceeded(input.runId, input.tenantId, input.incidentId, `${input.playbookName} completed successfully.`);
   } catch (error) {
     if (isCancellation(error)) {
       // A cancellation request also cancels any activity already in flight
@@ -82,11 +90,6 @@ export async function playbookRunWorkflow(input: PlaybookRunWorkflowInput): Prom
       await CancellationScope.nonCancellable(() => markCancelled(input.runId, input.tenantId, input.incidentId));
       throw error; // re-throw so Temporal itself records this execution as Cancelled, not Completed
     }
-    await markFailed(
-      input.runId,
-      input.tenantId,
-      input.incidentId,
-      error instanceof Error ? error.message : String(error),
-    );
+    await markFailed(input.runId, input.tenantId, input.incidentId, describeError(error));
   }
 }

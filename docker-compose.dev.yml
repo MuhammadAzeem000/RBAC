@@ -179,6 +179,8 @@ services:
         condition: service_started
       temporal:
         condition: service_started
+      integration-service:
+        condition: service_started
     environment:
       PORT: 4200
       NODE_ENV: development
@@ -190,6 +192,8 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
       IDENTITY_SERVICE_URL: http://identity-service:4000
+      INTEGRATION_SERVICE_URL: http://integration-service:4300
+      INTEGRATION_SERVICE_TOKEN: ${INTEGRATION_SERVICE_TOKEN:?INTEGRATION_SERVICE_TOKEN is required, copy .env.example to .env and set it}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       RABBITMQ_URL: amqp://rabbitmq:5672
     ports:
@@ -226,6 +230,42 @@ services:
     ports:
       - "4400:4400"
 
+  # Phase 3's connector runtime — Slack/VirusTotal live here, isolated from
+  # incident-service, with their own credential storage and rate limits.
+  # See backend/services/integration-service.
+  integration-service:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
+    volumes:
+      - ./backend/services/integration-service:/app
+      - integration_dev_node_modules:/app/node_modules
+      - ./backend/shared:/shared
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_started
+    environment:
+      PORT: 4300
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: integration_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required, copy .env.example to .env and set it}
+      INTEGRATION_SERVICE_TOKEN: ${INTEGRATION_SERVICE_TOKEN:?INTEGRATION_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4300:4300"
+
   # No healthcheck on the services above (a bare node:20-alpine image has
   # no wget/curl without an extra apk add), so downstream depends_on here use
   # service_started, not service_healthy — identity-service/incident-service/
@@ -246,11 +286,13 @@ services:
       - identity-service
       - incident-service
       - audit-service
+      - integration-service
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
       INCIDENT_SERVICE_URL: http://incident-service:4200
       AUDIT_SERVICE_URL: http://audit-service:4400
+      INTEGRATION_SERVICE_URL: http://integration-service:4300
     ports:
       - "8090:8000"
 
@@ -307,6 +349,7 @@ volumes:
   identity_dev_node_modules:
   incident_dev_node_modules:
   audit_dev_node_modules:
+  integration_dev_node_modules:
   gateway_dev_node_modules:
   notification_dev_node_modules:
   frontend_dev_node_modules:

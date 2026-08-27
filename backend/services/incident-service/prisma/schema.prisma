@@ -214,8 +214,9 @@ model StepExecution {
   stepName String @map("step_name") @db.VarChar(150)
   status   String @default("pending") @db.VarChar(20)
 
-  input  Json? @db.Json
-  output Json? @db.Json
+  input  Json?   @db.Json
+  output Json?   @db.Json
+  error  String? @db.Text
 
   attempts Int @default(0)
 
