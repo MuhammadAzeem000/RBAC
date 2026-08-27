@@ -75,6 +75,9 @@ void ensureModuleSeeded(MODULE_NAMES.INCIDENTS, 8);
 // resources, unlike Tenants below.
 void ensureModuleSeeded(MODULE_NAMES.CONNECTORS, 10);
 
+// Same backfill for the Approvals module (Phase 4).
+void ensureModuleSeeded(MODULE_NAMES.APPROVALS, 11);
+
 // Backfills the Tenants module/permissions the same way, but deliberately
 // does NOT grant them to "Administrator" (see MODULE_NAMES.TENANTS) — nobody
 // can manage tenants until a real platform operator is granted this

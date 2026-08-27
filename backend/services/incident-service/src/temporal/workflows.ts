@@ -6,15 +6,18 @@
 // nothing outside src/temporal/ should import it directly either, for the
 // same reason client.ts doesn't (see types.ts's comment).
 import { CancellationScope, condition, isCancellation, proxyActivities, setHandler } from "@temporalio/workflow";
-import type { Duration } from "@temporalio/common";
+import type { PlaybookStep } from "@responderx/shared";
 import type * as activities from "./activities";
-import { ApprovalSignalInput, PlaybookRunWorkflowInput, approveSignal } from "./types";
+import { DecisionSignalInput, PlaybookRunWorkflowInput, decisionSignal, parseDurationToMs } from "./types";
 
-export type { ApprovalSignalInput, PlaybookRunWorkflowInput };
+export type { DecisionSignalInput, PlaybookRunWorkflowInput };
 
 const {
   markRunning,
-  recordApproval,
+  createApproval,
+  recordDecision,
+  expireApproval,
+  escalateApproval,
   recordStepStart,
   recordStepResult,
   runStep,
@@ -26,7 +29,7 @@ const {
   retry: { maximumAttempts: 3, backoffCoefficient: 2 },
 });
 
-const SYNTHETIC_STEP = { key: "simulated-completion", name: "Run playbook", config: {} };
+const SYNTHETIC_STEP: PlaybookStep = { key: "simulated-completion", name: "Run playbook", config: {} };
 
 // Temporal wraps an Activity's thrown error in an ActivityFailure whose own
 // .message is a generic "Activity task failed" — the real message (e.g. a
@@ -43,34 +46,108 @@ function describeError(error: unknown): string {
   return message;
 }
 
-export async function playbookRunWorkflow(input: PlaybookRunWorkflowInput): Promise<void> {
-  let approved = !input.requiresApproval;
+type ApprovalOutcome = "approved" | "rejected" | "expired";
+
+// One reusable approval gate — the playbook-start gate and any individual
+// step's gate both go through this (Phase 4: "approval as a first-class
+// step type", not a one-off inline block). Opens an Approval row under the
+// named Policy, waits for a decision via signal, escalates once
+// (best-effort, via Slack) if the policy's escalationAfter elapses first,
+// then finally expires if the full timeoutDuration elapses with no decision.
+async function awaitApproval(
+  runId: string,
+  tenantId: string,
+  incidentId: string,
+  requestorId: string,
+  policyKey: string,
+  stepKey: string | null,
+): Promise<ApprovalOutcome> {
+  const gate = await createApproval(runId, tenantId, incidentId, requestorId, policyKey, stepKey);
+
+  let decided = false;
+  let decision: "approved" | "rejected" | null = null;
   let approverId: string | null = null;
 
-  setHandler(approveSignal, (signal) => {
-    approved = true;
+  setHandler(decisionSignal, (signal: DecisionSignalInput) => {
+    decided = true;
+    decision = signal.decision;
     approverId = signal.approverId;
   });
 
+  const totalMs = parseDurationToMs(gate.timeoutDuration);
+  let timedOut: boolean;
+
+  if (gate.escalationAfter) {
+    const escalateMs = parseDurationToMs(gate.escalationAfter);
+    const decidedBeforeEscalation = await condition(() => decided, escalateMs);
+    if (decidedBeforeEscalation) {
+      timedOut = false;
+    } else {
+      if (gate.escalationChannel) {
+        await escalateApproval(gate.approvalId, tenantId, policyKey, stepKey, gate.escalationChannel);
+      }
+      timedOut = !(await condition(() => decided, Math.max(totalMs - escalateMs, 0)));
+    }
+  } else {
+    timedOut = !(await condition(() => decided, totalMs));
+  }
+
+  // Only this invocation's own decision should ever be delivered to it —
+  // clearing the handler here (rather than leaving it bound) is what makes
+  // it safe to call awaitApproval again later in the same run for a
+  // different gate without a stray/late signal answering the wrong one.
+  setHandler(decisionSignal, undefined);
+
+  if (timedOut) {
+    await expireApproval(gate.approvalId, tenantId, incidentId);
+    return "expired";
+  }
+
+  await recordDecision(gate.approvalId, tenantId, incidentId, decision!, approverId!);
+  return decision!;
+}
+
+function describeApprovalOutcome(outcome: "rejected" | "expired", stepKey: string | null): string {
+  const where = stepKey ? `step "${stepKey}"` : "playbook start";
+  return outcome === "rejected" ? `Approval for ${where} was rejected` : `Approval for ${where} expired`;
+}
+
+export async function playbookRunWorkflow(input: PlaybookRunWorkflowInput): Promise<void> {
   try {
-    if (input.requiresApproval) {
-      // Cast: approvalTimeout is a validated-at-config-load string (see
-      // config/env.ts), not something statically known to match the "ms"
-      // library's Duration string format — trusted at runtime, same as
-      // other operationally-validated-not-statically-provable casts
-      // elsewhere in this codebase.
-      const approvedInTime = await condition(() => approved, input.approvalTimeout as Duration);
-      if (!approvedInTime) {
-        await markFailed(input.runId, input.tenantId, input.incidentId, "Approval expired");
+    if (input.startPolicyKey) {
+      const outcome = await awaitApproval(
+        input.runId,
+        input.tenantId,
+        input.incidentId,
+        input.requestorId,
+        input.startPolicyKey,
+        null,
+      );
+      if (outcome !== "approved") {
+        await markFailed(input.runId, input.tenantId, input.incidentId, describeApprovalOutcome(outcome, null));
         return;
       }
-      await recordApproval(input.runId, input.tenantId, approverId!);
     }
 
     await markRunning(input.runId, input.tenantId);
 
     const steps = input.steps.length > 0 ? input.steps : [SYNTHETIC_STEP];
     for (const step of steps) {
+      if (step.policyKey) {
+        const outcome = await awaitApproval(
+          input.runId,
+          input.tenantId,
+          input.incidentId,
+          input.requestorId,
+          step.policyKey,
+          step.key,
+        );
+        if (outcome !== "approved") {
+          await markFailed(input.runId, input.tenantId, input.incidentId, describeApprovalOutcome(outcome, step.key));
+          return;
+        }
+      }
+
       const stepExecutionId = await recordStepStart(input.runId, input.tenantId, input.incidentId, step);
       try {
         const output = await runStep(step, input.tenantId);

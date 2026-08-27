@@ -1,12 +1,13 @@
-// Plain Node context — this is what playbookRun.service.ts calls to start/
-// signal/cancel workflows. Deliberately does NOT import workflows.ts: that
-// module calls proxyActivities() at module scope, which throws outside an
-// active workflow execution context. Only ./types (no such call) and string
-// workflow-type names cross that boundary here.
+// Plain Node context — this is what playbookRun.service.ts and
+// approval.service.ts call to start/signal/cancel workflows. Deliberately
+// does NOT import workflows.ts: that module calls proxyActivities() at
+// module scope, which throws outside an active workflow execution context.
+// Only ./types (no such call) and string workflow-type names cross that
+// boundary here.
 import { Client, Connection, WorkflowIdReusePolicy } from "@temporalio/client";
 import type { PlaybookStep } from "@responderx/shared";
 import { env } from "../config/env";
-import { approveSignal, PLAYBOOK_TASK_QUEUE, PLAYBOOK_WORKFLOW_TYPE, PlaybookRunWorkflowInput } from "./types";
+import { PLAYBOOK_TASK_QUEUE, PLAYBOOK_WORKFLOW_TYPE, PlaybookRunWorkflowInput, decisionSignal } from "./types";
 
 let clientPromise: Promise<Client> | null = null;
 
@@ -27,8 +28,9 @@ export interface StartPlaybookRunWorkflowInput {
   runId: bigint;
   tenantId: bigint;
   incidentId: bigint;
+  requestorId: bigint;
   playbookName: string;
-  requiresApproval: boolean;
+  startPolicyKey: string | null;
   steps: PlaybookStep[];
 }
 
@@ -39,10 +41,10 @@ export async function startPlaybookRunWorkflow(input: StartPlaybookRunWorkflowIn
     runId: input.runId.toString(),
     tenantId: input.tenantId.toString(),
     incidentId: input.incidentId.toString(),
+    requestorId: input.requestorId.toString(),
     playbookName: input.playbookName,
-    requiresApproval: input.requiresApproval,
+    startPolicyKey: input.startPolicyKey,
     steps: input.steps,
-    approvalTimeout: env.PLAYBOOK_APPROVAL_TIMEOUT,
   };
 
   const handle = await client.workflow.start(PLAYBOOK_WORKFLOW_TYPE, {
@@ -54,10 +56,17 @@ export async function startPlaybookRunWorkflow(input: StartPlaybookRunWorkflowIn
   return handle.workflowId;
 }
 
-export async function signalApproval(workflowId: string, approverId: bigint): Promise<void> {
+// Generalizes the old approve-only signalApproval to a real decision —
+// used by both approving and rejecting a pending Approval (see
+// approval.service.ts).
+export async function signalDecision(
+  workflowId: string,
+  decision: "approved" | "rejected",
+  approverId: bigint,
+): Promise<void> {
   const client = await getClient();
   const handle = client.workflow.getHandle(workflowId);
-  await handle.signal(approveSignal, { approverId: approverId.toString() });
+  await handle.signal(decisionSignal, { decision, approverId: approverId.toString() });
 }
 
 export async function cancelPlaybookRunWorkflow(workflowId: string): Promise<void> {

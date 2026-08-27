@@ -26,6 +26,7 @@ export interface CatalogEntry {
   description: string | null;
   version: string;
   requiresApproval: boolean;
+  startPolicyKey: string | null;
 }
 
 const latestVersionInclude = {
@@ -46,6 +47,7 @@ export async function getCatalog(db: Prisma.TransactionClient): Promise<CatalogE
       description: p.description,
       version: p.versions[0].version,
       requiresApproval: p.versions[0].requiresApproval,
+      startPolicyKey: p.versions[0].startPolicyKey,
     }));
 }
 
@@ -55,6 +57,7 @@ export interface ResolvedPlaybookVersion {
   playbookName: string;
   version: string;
   requiresApproval: boolean;
+  startPolicyKey: string | null;
   steps: PlaybookStep[];
 }
 
@@ -75,6 +78,7 @@ export async function findLatestVersionByKey(
     playbookName: playbook.name,
     version: version.version,
     requiresApproval: version.requiresApproval,
+    startPolicyKey: version.startPolicyKey,
     steps: parseSteps(version.steps),
   };
 }
@@ -95,6 +99,7 @@ export async function findVersionById(
     playbookName: version.playbook.name,
     version: version.version,
     requiresApproval: version.requiresApproval,
+    startPolicyKey: version.startPolicyKey,
     steps: parseSteps(version.steps),
   };
 }

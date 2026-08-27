@@ -42,11 +42,6 @@ incidentRouter.get("/:id/evidence", canView, asyncHandler(evidenceController.lis
 incidentRouter.post("/:id/playbook-runs", canUpdate, asyncHandler(playbookRunController.startPlaybookRun));
 incidentRouter.get("/:id/playbook-runs", canView, asyncHandler(playbookRunController.listPlaybookRuns));
 incidentRouter.post(
-  "/:id/playbook-runs/:runId/approve",
-  canUpdate,
-  asyncHandler(playbookRunController.approvePlaybookRun),
-);
-incidentRouter.post(
   "/:id/playbook-runs/:runId/cancel",
   canUpdate,
   asyncHandler(playbookRunController.cancelPlaybookRun),

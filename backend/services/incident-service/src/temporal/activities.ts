@@ -14,8 +14,16 @@ import { writeOutboxEvent } from "../services/outbox.service";
 import { recordTimelineEvent } from "../services/timeline.service";
 import { publishEvent } from "../events/eventBus.service";
 import { ROUTING_KEYS } from "../events/topology";
+import { parseDurationToMs } from "./types";
 
-const TENANT_SCOPED_MODELS = ["PlaybookRun", "TimelineEvent", "OutboxEvent", "StepExecution"] as const;
+const TENANT_SCOPED_MODELS = [
+  "PlaybookRun",
+  "TimelineEvent",
+  "OutboxEvent",
+  "StepExecution",
+  "Policy",
+  "Approval",
+] as const;
 
 function scopedDb(tenantId: string) {
   return forTenant(prisma, BigInt(tenantId), TENANT_SCOPED_MODELS);
@@ -29,30 +37,134 @@ export async function markRunning(runId: string, tenantId: string): Promise<void
   });
 }
 
-// Approving a disruptive action is exactly the kind of decision the MVP
-// plan requires be centrally audited — this activity is what preserves
-// Phase 1's audit-gap fix (approvals reaching audit-service) now that
-// approval is a signal instead of a synchronous HTTP-driven DB update.
-export async function recordApproval(runId: string, tenantId: string, approverId: string): Promise<void> {
+export interface ApprovalGate {
+  approvalId: string;
+  timeoutDuration: string;
+  escalationAfter: string | null;
+  escalationChannel: string | null;
+}
+
+// Opens one approval gate — the playbook-start gate (stepKey null) or an
+// individual step's gate — by looking up the named Policy and creating the
+// Approval row that POST /api/v1/approvals/:id/decision will later resolve.
+// Requestor is always the run's original initiator (no separate "who
+// requested this specific step's approval" concept in this MVP).
+export async function createApproval(
+  runId: string,
+  tenantId: string,
+  incidentId: string,
+  requestorId: string,
+  policyKey: string,
+  stepKey: string | null,
+): Promise<ApprovalGate> {
   const db = scopedDb(tenantId);
-  await db.$transaction(async (tx) => {
-    const updated = await tx.playbookRun.update({
-      where: { id: BigInt(runId) },
-      data: { approvedBy: BigInt(approverId), approvedAt: new Date() },
+  const policy = await db.policy.findFirst({ where: { key: policyKey } });
+  if (!policy) {
+    throw ApplicationFailure.nonRetryable(`Unknown policy "${policyKey}"`);
+  }
+
+  const approval = await db.approval.create({
+    data: {
+      tenantId: BigInt(tenantId),
+      playbookRunId: BigInt(runId),
+      stepKey,
+      policyKey,
+      requestorUserId: BigInt(requestorId),
+      expiresAt: new Date(Date.now() + parseDurationToMs(policy.timeoutDuration)),
+    },
+  });
+
+  await recordTimelineEvent(db, BigInt(tenantId), {
+    incidentId: BigInt(incidentId),
+    eventType: "approval_requested",
+    summary: stepKey ? `Approval requested for step "${stepKey}"` : "Approval requested to start the playbook",
+    metadata: { approvalId: approval.id.toString(), policyKey },
+  });
+
+  return {
+    approvalId: approval.id.toString(),
+    timeoutDuration: policy.timeoutDuration,
+    escalationAfter: policy.escalationAfter,
+    escalationChannel: policy.escalationChannel,
+  };
+}
+
+// A human decision — approve or reject — replacing the old approve-only
+// recordApproval. Preserves Phase 1's audit-gap fix (decisions reaching
+// audit-service) now backed by a real, queryable Approval row instead of
+// two columns on PlaybookRun.
+export async function recordDecision(
+  approvalId: string,
+  tenantId: string,
+  incidentId: string,
+  decision: "approved" | "rejected",
+  approverId: string,
+): Promise<void> {
+  const db = scopedDb(tenantId);
+  const updated = await db.$transaction(async (tx) => {
+    const row = await tx.approval.update({
+      where: { id: BigInt(approvalId) },
+      data: { decision, approverUserId: BigInt(approverId), decidedAt: new Date() },
     });
 
     await writeOutboxEvent(tx, {
       tenantId: BigInt(tenantId),
-      eventType: "PLAYBOOK_RUN_APPROVED",
-      aggregateType: "PLAYBOOK_RUN",
-      aggregateId: updated.id.toString(),
+      eventType: decision === "approved" ? "APPROVAL_APPROVED" : "APPROVAL_REJECTED",
+      aggregateType: "APPROVAL",
+      aggregateId: row.id.toString(),
       actorId: approverId,
-      action: "APPROVE",
-      resourceType: "PLAYBOOK_RUN",
-      resourceId: updated.id.toString(),
-      metadata: { playbookKey: updated.playbookKey },
+      action: decision.toUpperCase(),
+      resourceType: "APPROVAL",
+      resourceId: row.id.toString(),
+      metadata: { policyKey: row.policyKey, stepKey: row.stepKey },
     });
+
+    return row;
   });
+
+  await recordTimelineEvent(db, BigInt(tenantId), {
+    incidentId: BigInt(incidentId),
+    eventType: decision === "approved" ? "approval_approved" : "approval_rejected",
+    actorUserId: BigInt(approverId),
+    summary: updated.stepKey ? `Approval for step "${updated.stepKey}" ${decision}` : `Playbook start approval ${decision}`,
+    metadata: { approvalId },
+  });
+}
+
+export async function expireApproval(approvalId: string, tenantId: string, incidentId: string): Promise<void> {
+  const db = scopedDb(tenantId);
+  await db.approval.update({ where: { id: BigInt(approvalId) }, data: { decision: "expired", decidedAt: new Date() } });
+
+  await recordTimelineEvent(db, BigInt(tenantId), {
+    incidentId: BigInt(incidentId),
+    eventType: "approval_expired",
+    summary: "Approval expired without a decision",
+    metadata: { approvalId },
+  });
+}
+
+// Best-effort only — a failed or unconfigured Slack connector must never
+// fail the approval wait itself, so every error here is caught and logged,
+// never re-thrown.
+export async function escalateApproval(
+  approvalId: string,
+  tenantId: string,
+  policyKey: string,
+  stepKey: string | null,
+  channel: string,
+): Promise<void> {
+  const db = scopedDb(tenantId);
+  const text = stepKey
+    ? `Approval for step "${stepKey}" (policy "${policyKey}") is overdue and needs a decision.`
+    : `Approval to start a playbook (policy "${policyKey}") is overdue and needs a decision.`;
+
+  try {
+    await callConnectorAction("slack", "postMessage", tenantId, { channel, text });
+  } catch (error) {
+    console.error(`Escalation notification failed for approval ${approvalId}:`, error);
+  }
+
+  await db.approval.update({ where: { id: BigInt(approvalId) }, data: { escalatedAt: new Date() } });
 }
 
 export async function recordStepStart(
@@ -103,29 +215,23 @@ export async function recordStepResult(stepExecutionId: string, tenantId: string
   });
 }
 
-// A step with no connector/action bound to it (every playbook step before
-// Phase 3, and any step that genuinely doesn't need a real integration)
-// still runs simulated — this branch is otherwise unchanged from before
-// Phase 3. A step WITH connector/action calls the real connector runtime
-// (integration-service) instead: still runs as this same individually
-// retried, individually timed-out, individually observable Temporal
-// Activity, just doing real work now instead of a setTimeout.
-export async function runStep(step: PlaybookStep, tenantId: string): Promise<Record<string, unknown>> {
-  if (!step.connector || !step.action) {
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    return { message: `${step.name} completed successfully (simulated).` };
-  }
-
+// The one place this service calls integration-service's connector
+// runtime — used both by runStep (a playbook step bound to a connector)
+// and escalateApproval (a policy's Slack escalation channel), so both get
+// identical error classification into retryable-vs-not.
+async function callConnectorAction(
+  connector: string,
+  action: string,
+  tenantId: string,
+  params: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   let response: Response;
   try {
-    response = await fetch(
-      `${env.INTEGRATION_SERVICE_URL}/api/connectors/${step.connector}/actions/${step.action}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Service-Token": env.INTEGRATION_SERVICE_TOKEN },
-        body: JSON.stringify({ tenantId, params: step.config }),
-      },
-    );
+    response = await fetch(`${env.INTEGRATION_SERVICE_URL}/api/connectors/${connector}/actions/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Service-Token": env.INTEGRATION_SERVICE_TOKEN },
+      body: JSON.stringify({ tenantId, params }),
+    });
   } catch (error) {
     // Network-level failure (integration-service unreachable, timeout) —
     // transient by nature, let Temporal's own retry policy on this
@@ -152,6 +258,21 @@ export async function runStep(step: PlaybookStep, tenantId: string): Promise<Rec
   }
 
   return body.result ?? {};
+}
+
+// A step with no connector/action bound to it (every playbook step before
+// Phase 3, and any step that genuinely doesn't need a real integration)
+// still runs simulated — this branch is otherwise unchanged from before
+// Phase 3. A step WITH connector/action calls the real connector runtime
+// (integration-service) instead: still runs as this same individually
+// retried, individually timed-out, individually observable Temporal
+// Activity, just doing real work now instead of a setTimeout.
+export async function runStep(step: PlaybookStep, tenantId: string): Promise<Record<string, unknown>> {
+  if (!step.connector || !step.action) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    return { message: `${step.name} completed successfully (simulated).` };
+  }
+  return callConnectorAction(step.connector, step.action, tenantId, step.config);
 }
 
 export async function markSucceeded(runId: string, tenantId: string, incidentId: string, summary: string): Promise<void> {
@@ -201,6 +322,14 @@ export async function markCancelled(runId: string, tenantId: string, incidentId:
   const run = await db.playbookRun.update({
     where: { id: BigInt(runId) },
     data: { state: "cancelled", endedAt: new Date() },
+  });
+
+  // A pending approval for a run that just got cancelled is no longer
+  // actionable — reuse "expired" rather than adding a fifth decision value
+  // for what's really the same "this gate is now moot" outcome.
+  await db.approval.updateMany({
+    where: { playbookRunId: BigInt(runId), decision: "pending" },
+    data: { decision: "expired", decidedAt: new Date() },
   });
 
   await recordTimelineEvent(db, BigInt(tenantId), {

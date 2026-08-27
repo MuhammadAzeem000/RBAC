@@ -7,6 +7,7 @@ import { authenticate } from "./middlewares/authenticate";
 import { tenantContext } from "./middlewares/tenantContext";
 import { connectEventBus } from "./events/eventBus.service";
 import { errorHandler } from "./middlewares/errorHandler";
+import { approvalRouter } from "./routes/approval.routes";
 import { incidentRouter } from "./routes/incident.routes";
 import { notFound } from "./middlewares/notFound";
 import { startOutboxPublisher } from "./services/outboxPublisher.service";
@@ -31,6 +32,10 @@ app.get("/health", (_req: Request, res: Response) => {
 // access token; per-action permission checks happen inside incidentRouter
 // via requireIncidentPermission (which calls identity-service).
 app.use("/api/v1/incidents", authenticate, tenantContext, incidentRouter);
+
+// Phase 4: dedicated approval surface, replacing the old
+// POST /:id/playbook-runs/:runId/approve — see routes/approval.routes.ts.
+app.use("/api/v1/approvals", authenticate, tenantContext, approvalRouter);
 
 app.use(notFound);
 app.use(errorHandler);
