@@ -64,6 +64,15 @@ model Incident {
 
 // Immutable source context once attached — analyst annotations belong to the
 // incident (comments/notes), never to the alert row itself.
+// Two ways a row here comes to exist: attachAlert (a human linking a
+// related alert to an incident that already exists — summary required,
+// severity/occurredAt/rawRef left null) and ingestAlert (Phase 5: a real
+// alert arriving via POST /api/v1/alerts, which creates the Incident AND
+// this row together — severity/occurredAt/rawRef populated from the
+// canonical @responderx/shared Alert shape, summary synthesized since the
+// canonical shape has no such field). @@unique below is the concrete dedup
+// mechanism ingestAlert relies on: the same (source, externalId) arriving
+// twice returns the existing row instead of creating a duplicate incident.
 model Alert {
   id         BigInt @id @default(autoincrement())
   tenantId   BigInt @map("tenant_id")
@@ -71,17 +80,47 @@ model Alert {
 
   externalAlertId String  @map("external_alert_id") @db.VarChar(150)
   source          String  @db.VarChar(100)
-  summary         String  @db.Text
+  summary         String? @db.Text
   rawPayload      Json?   @map("raw_payload") @db.Json
+
+  severity   String?   @db.VarChar(20)
+  occurredAt DateTime? @map("occurred_at") @db.Timestamp(6)
+  rawRef     String?   @map("raw_ref") @db.VarChar(500)
 
   attachedBy BigInt   @map("attached_by")
   attachedAt DateTime @default(now()) @map("attached_at") @db.Timestamp(6)
 
   incident Incident @relation(fields: [incidentId], references: [id])
+  entities Entity[]
 
+  @@unique([tenantId, source, externalAlertId])
   @@index([tenantId])
   @@index([incidentId])
   @@map("incident_alerts")
+}
+
+// A normalized indicator referenced by an alert (MVP plan §4's Entity row —
+// mirrored in @responderx/shared's entity.ts). Persisted structurally
+// rather than as opaque JSON so a future correlation/query feature
+// ("every alert touching this IP") doesn't need a schema change to exist —
+// not built in this phase, just not precluded by how this is stored.
+model Entity {
+  id       BigInt @id @default(autoincrement())
+  tenantId BigInt @map("tenant_id")
+  alertId  BigInt @map("alert_id")
+
+  type       String  @db.VarChar(30)
+  value      String  @db.VarChar(500)
+  confidence Float?
+  attributes Json?   @db.Json
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  alert Alert @relation(fields: [alertId], references: [id])
+
+  @@index([tenantId])
+  @@index([alertId])
+  @@map("entities")
 }
 
 model Task {

@@ -9,6 +9,7 @@ import { connectEventBus } from "./events/eventBus.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { approvalRouter } from "./routes/approval.routes";
 import { incidentRouter } from "./routes/incident.routes";
+import { ingestionRouter } from "./routes/ingestion.routes";
 import { notFound } from "./middlewares/notFound";
 import { startOutboxPublisher } from "./services/outboxPublisher.service";
 import { startPlaybookWorker } from "./temporal/worker";
@@ -36,6 +37,11 @@ app.use("/api/v1/incidents", authenticate, tenantContext, incidentRouter);
 // Phase 4: dedicated approval surface, replacing the old
 // POST /:id/playbook-runs/:runId/approve — see routes/approval.routes.ts.
 app.use("/api/v1/approvals", authenticate, tenantContext, approvalRouter);
+
+// Phase 5: the plan's documented POST /alerts ingestion surface — a real
+// alert becomes a Case automatically, distinct from the human-driven
+// POST /:id/alerts (attach) nested under incidentRouter above.
+app.use("/api/v1/alerts", authenticate, tenantContext, ingestionRouter);
 
 app.use(notFound);
 app.use(errorHandler);

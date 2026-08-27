@@ -56,45 +56,57 @@ export async function createIncident(
   input: CreateIncidentInput,
   actorUserId: bigint,
 ): Promise<IncidentResponse> {
-  return db.$transaction(async (tx) => {
-    const incident = await tx.incident.create({
-      data: {
-        // The tenant-scoping extension overwrites this to the JWT-derived
-        // tenantId regardless of what's passed here (never trust a
-        // caller-supplied value) — passed explicitly only to satisfy
-        // Prisma's generated type, which requires the column.
-        tenantId,
-        title: input.title,
-        description: input.description,
-        category: input.category,
-        severity: input.severity,
-        priority: input.priority,
-        tags: input.tags,
-        source: input.source,
-        externalId: input.externalId,
-        detectedAt: input.detectedAt,
-        dueAt: input.dueAt,
-        ownerUserId: input.ownerUserId,
-        status: "new",
-        createdBy: actorUserId,
-      },
-      select: incidentSelect,
-    });
+  return db.$transaction((tx) => createIncidentInTx(tx, tenantId, input, actorUserId));
+}
 
-    await writeOutboxEvent(tx, {
+// The actual writes, split out from createIncident so a caller that already
+// has its OWN open transaction (Phase 5's ingestion.service.ts, which needs
+// incident + alert + entities to commit or fail together) can call this
+// directly instead of nesting a second db.$transaction inside the first —
+// Prisma doesn't support nested interactive transactions.
+export async function createIncidentInTx(
+  tx: Prisma.TransactionClient,
+  tenantId: bigint,
+  input: CreateIncidentInput,
+  actorUserId: bigint,
+): Promise<IncidentResponse> {
+  const incident = await tx.incident.create({
+    data: {
+      // The tenant-scoping extension overwrites this to the JWT-derived
+      // tenantId regardless of what's passed here (never trust a
+      // caller-supplied value) — passed explicitly only to satisfy
+      // Prisma's generated type, which requires the column.
       tenantId,
-      eventType: "INCIDENT_CREATED",
-      aggregateType: "INCIDENT",
-      aggregateId: incident.id.toString(),
-      actorId: actorUserId.toString(),
-      action: "CREATE",
-      resourceType: "INCIDENT",
-      resourceId: incident.id.toString(),
-      payload: { title: incident.title, severity: incident.severity },
-    });
-
-    return incident;
+      title: input.title,
+      description: input.description,
+      category: input.category,
+      severity: input.severity,
+      priority: input.priority,
+      tags: input.tags,
+      source: input.source,
+      externalId: input.externalId,
+      detectedAt: input.detectedAt,
+      dueAt: input.dueAt,
+      ownerUserId: input.ownerUserId,
+      status: "new",
+      createdBy: actorUserId,
+    },
+    select: incidentSelect,
   });
+
+  await writeOutboxEvent(tx, {
+    tenantId,
+    eventType: "INCIDENT_CREATED",
+    aggregateType: "INCIDENT",
+    aggregateId: incident.id.toString(),
+    actorId: actorUserId.toString(),
+    action: "CREATE",
+    resourceType: "INCIDENT",
+    resourceId: incident.id.toString(),
+    payload: { title: incident.title, severity: incident.severity },
+  });
+
+  return incident;
 }
 
 export async function listIncidents(
