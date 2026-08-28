@@ -1,29 +1,20 @@
 // Activities run in a normal Node.js context (unlike workflows.ts, which is
 // sandboxed) — this is the only place in the Temporal integration allowed
-// to touch Prisma, the outbox, or publish domain events. Every function
-// here builds its own tenant-scoped client via forTenant(), the exact same
-// pattern the pre-Temporal setTimeout-based scheduleSimulatedCompletion()
-// used — activities, like that old detached timer, run with no req/req.db
-// to inherit.
+// to touch Prisma, this service's own outbox, or publish domain events.
+// Every function here builds its own tenant-scoped client via forTenant(),
+// since activities run with no req/req.db to inherit.
 import { ApplicationFailure } from "@temporalio/common";
 import { ConnectorActionResponse, forTenant, PlaybookStep } from "@responderx/shared";
 import { env } from "../config/env";
 import { prisma } from "../config/prisma";
 import { Prisma } from "../generated/prisma/client";
 import { writeOutboxEvent } from "../services/outbox.service";
-import { recordTimelineEvent } from "../services/timeline.service";
+import { recordIncidentTimelineEvent } from "../services/incidentClient.service";
 import { publishEvent } from "../events/eventBus.service";
 import { ROUTING_KEYS } from "../events/topology";
 import { parseDurationToMs } from "./types";
 
-const TENANT_SCOPED_MODELS = [
-  "PlaybookRun",
-  "TimelineEvent",
-  "OutboxEvent",
-  "StepExecution",
-  "Policy",
-  "Approval",
-] as const;
+const TENANT_SCOPED_MODELS = ["PlaybookRun", "StepExecution", "Policy", "Approval", "OutboxEvent"] as const;
 
 function scopedDb(tenantId: string) {
   return forTenant(prisma, BigInt(tenantId), TENANT_SCOPED_MODELS);
@@ -49,6 +40,14 @@ export interface ApprovalGate {
 // Approval row that POST /api/v1/approvals/:id/decision will later resolve.
 // Requestor is always the run's original initiator (no separate "who
 // requested this specific step's approval" concept in this MVP).
+//
+// Note: this Approval.create() is not idempotent, and the timeline call
+// below is now a cross-service HTTP call rather than a local DB write — if
+// it fails, Temporal retries this whole Activity (see workflows.ts's
+// proxyActivities retry policy), which would re-run the create() too. This
+// is a narrow, pre-existing class of risk (recordStepStart has the same
+// shape) accepted at the same rigor level as the rest of this dev-stage
+// codebase's retry/idempotency posture — not solved here.
 export async function createApproval(
   runId: string,
   tenantId: string,
@@ -74,8 +73,7 @@ export async function createApproval(
     },
   });
 
-  await recordTimelineEvent(db, BigInt(tenantId), {
-    incidentId: BigInt(incidentId),
+  await recordIncidentTimelineEvent(tenantId, incidentId, {
     eventType: "approval_requested",
     summary: stepKey ? `Approval requested for step "${stepKey}"` : "Approval requested to start the playbook",
     metadata: { approvalId: approval.id.toString(), policyKey },
@@ -89,10 +87,11 @@ export async function createApproval(
   };
 }
 
-// A human decision — approve or reject — replacing the old approve-only
-// recordApproval. Preserves Phase 1's audit-gap fix (decisions reaching
-// audit-service) now backed by a real, queryable Approval row instead of
-// two columns on PlaybookRun.
+// A human decision — approve or reject. Preserves decisions reaching
+// audit-service (this service's own outbox now, not incident-service's) now
+// backed by a real, queryable Approval row. This is the SOLE writer of the
+// approval_approved/approval_rejected timeline entry — see the incident-service
+// side (approval.controller.ts) for the duplicate-write bug this replaces.
 export async function recordDecision(
   approvalId: string,
   tenantId: string,
@@ -122,10 +121,9 @@ export async function recordDecision(
     return row;
   });
 
-  await recordTimelineEvent(db, BigInt(tenantId), {
-    incidentId: BigInt(incidentId),
+  await recordIncidentTimelineEvent(tenantId, incidentId, {
     eventType: decision === "approved" ? "approval_approved" : "approval_rejected",
-    actorUserId: BigInt(approverId),
+    actorUserId: approverId,
     summary: updated.stepKey ? `Approval for step "${updated.stepKey}" ${decision}` : `Playbook start approval ${decision}`,
     metadata: { approvalId },
   });
@@ -135,8 +133,7 @@ export async function expireApproval(approvalId: string, tenantId: string, incid
   const db = scopedDb(tenantId);
   await db.approval.update({ where: { id: BigInt(approvalId) }, data: { decision: "expired", decidedAt: new Date() } });
 
-  await recordTimelineEvent(db, BigInt(tenantId), {
-    incidentId: BigInt(incidentId),
+  await recordIncidentTimelineEvent(tenantId, incidentId, {
     eventType: "approval_expired",
     summary: "Approval expired without a decision",
     metadata: { approvalId },
@@ -187,8 +184,7 @@ export async function recordStepStart(
     },
   });
 
-  await recordTimelineEvent(db, BigInt(tenantId), {
-    incidentId: BigInt(incidentId),
+  await recordIncidentTimelineEvent(tenantId, incidentId, {
     eventType: "playbook_step_started",
     summary: `Step "${step.name}" started`,
     metadata: { runId, stepExecutionId: row.id.toString() },
@@ -260,13 +256,11 @@ async function callConnectorAction(
   return body.result ?? {};
 }
 
-// A step with no connector/action bound to it (every playbook step before
-// Phase 3, and any step that genuinely doesn't need a real integration)
-// still runs simulated — this branch is otherwise unchanged from before
-// Phase 3. A step WITH connector/action calls the real connector runtime
-// (integration-service) instead: still runs as this same individually
-// retried, individually timed-out, individually observable Temporal
-// Activity, just doing real work now instead of a setTimeout.
+// A step with no connector/action bound to it still runs simulated. A step
+// WITH connector/action calls the real connector runtime (integration-service)
+// instead: still runs as this same individually retried, individually
+// timed-out, individually observable Temporal Activity, just doing real
+// work instead of a setTimeout.
 export async function runStep(step: PlaybookStep, tenantId: string): Promise<Record<string, unknown>> {
   if (!step.connector || !step.action) {
     await new Promise((resolve) => setTimeout(resolve, 800));
@@ -282,8 +276,7 @@ export async function markSucceeded(runId: string, tenantId: string, incidentId:
     data: { state: "succeeded", endedAt: new Date(), outputsSummary: summary },
   });
 
-  await recordTimelineEvent(db, BigInt(tenantId), {
-    incidentId: BigInt(incidentId),
+  await recordIncidentTimelineEvent(tenantId, incidentId, {
     eventType: "playbook_completed",
     summary: `Playbook "${run.playbookKey}" completed: ${run.state}`,
     metadata: { runId, state: run.state },
@@ -303,8 +296,7 @@ export async function markFailed(runId: string, tenantId: string, incidentId: st
     data: { state: "failed", endedAt: new Date(), errorMessage },
   });
 
-  await recordTimelineEvent(db, BigInt(tenantId), {
-    incidentId: BigInt(incidentId),
+  await recordIncidentTimelineEvent(tenantId, incidentId, {
     eventType: "playbook_completed",
     summary: `Playbook "${run.playbookKey}" failed: ${errorMessage}`,
     metadata: { runId, state: run.state },
@@ -332,8 +324,7 @@ export async function markCancelled(runId: string, tenantId: string, incidentId:
     data: { decision: "expired", decidedAt: new Date() },
   });
 
-  await recordTimelineEvent(db, BigInt(tenantId), {
-    incidentId: BigInt(incidentId),
+  await recordIncidentTimelineEvent(tenantId, incidentId, {
     eventType: "playbook_cancelled",
     summary: `Playbook "${run.playbookKey}" run cancelled`,
     metadata: { runId },

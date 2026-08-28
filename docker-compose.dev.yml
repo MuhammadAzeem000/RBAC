@@ -143,31 +143,73 @@ services:
     ports:
       - "4000:4000"
 
-  # Debian-based (node:20-slim), NOT node:20-alpine like every other service
-  # here — @temporalio/core-bridge (src/temporal/) ships a native binding
-  # built against glibc, and Alpine's musl libc can't load it (confirmed:
+  incident-service:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
+    volumes:
+      - ./backend/services/incident-service:/app
+      - incident_dev_node_modules:/app/node_modules
+      - ./backend/shared:/shared
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_started
+    environment:
+      PORT: 4200
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: incident_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      # Phase 5.2: guards the machine-to-machine POST .../timeline route
+      # playbook-service's Temporal Activities call — see
+      # src/middlewares/requireServiceToken.ts.
+      INCIDENT_SERVICE_TOKEN: ${INCIDENT_SERVICE_TOKEN:?INCIDENT_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      # The reverse direction: events/alertConsumer.ts's triggerPlaybookKey
+      # handling calls playbook-service's own machine-to-machine route.
+      PLAYBOOK_SERVICE_URL: http://playbook-service:4600
+      PLAYBOOK_SERVICE_TOKEN: ${PLAYBOOK_SERVICE_TOKEN:?PLAYBOOK_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4200:4200"
+
+  # Phase 5.2's decomposition slice 2 — the Temporal-based orchestration
+  # engine, playbook catalog, and approval-gate system, split out of
+  # incident-service. Debian-based (node:20-slim), NOT node:20-alpine like
+  # every other service here — @temporalio/core-bridge (src/temporal/) ships
+  # a native binding built against glibc, and Alpine's musl libc can't load
+  # it (confirmed when this subsystem still lived in incident-service:
   # neither running unmodified nor with the "gcompat" compatibility shim,
-  # which is missing symbols like gnu_get_libc_version that the binding
-  # actually needs — this isn't a "just add a package" fix on Alpine).
+  # which is missing symbols like gnu_get_libc_version the binding actually
+  # needs — this isn't a "just add a package" fix on Alpine).
   #
   # Uses "dev:nodemon" (native fs-event watching), NOT "dev:polling" like
-  # every other service — confirmed empirically: nodemon's --legacy-watch
-  # (stat-polling) combined with the heavy file-read activity Temporal's
-  # Worker does while webpack-bundling src/temporal/workflows.ts on every
-  # (re)start causes nodemon to immediately perceive a false "change" and
-  # restart again, in a tight loop that never lets the worker stay up long
-  # enough to process a single task. Trade-off: per the note on
-  # identity-service's dev:polling above, native watching has previously
-  # been unreliable at picking up host-side edits under this Windows
-  # bind-mount — if hot-reload seems to stop working here, restart the
-  # container manually after editing.
-  incident-service:
+  # every other service — confirmed empirically (same subsystem, same
+  # finding, before this split): nodemon's --legacy-watch (stat-polling)
+  # combined with the heavy file-read activity Temporal's Worker does while
+  # webpack-bundling src/temporal/workflows.ts on every (re)start causes
+  # nodemon to immediately perceive a false "change" and restart again, in a
+  # tight loop that never lets the worker stay up long enough to process a
+  # single task. Trade-off: per the note on identity-service's dev:polling
+  # above, native watching has previously been unreliable at picking up
+  # host-side edits under this Windows bind-mount — if hot-reload seems to
+  # stop working here, restart the container manually after editing.
+  playbook-service:
     image: node:20-slim
     working_dir: /app
     command: sh -c "apt-get update >/dev/null && apt-get install -y --no-install-recommends openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:nodemon"
     volumes:
-      - ./backend/services/incident-service:/app
-      - incident_dev_node_modules:/app/node_modules
+      - ./backend/services/playbook-service:/app
+      - playbook_dev_node_modules:/app/node_modules
       - ./backend/shared:/shared
     restart: unless-stopped
     depends_on:
@@ -181,23 +223,31 @@ services:
         condition: service_started
       integration-service:
         condition: service_started
+      incident-service:
+        condition: service_started
     environment:
-      PORT: 4200
+      PORT: 4600
       NODE_ENV: development
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${DB_USER:-commtel}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
-      DB_NAME: incident_db
+      DB_NAME: playbook_db
       TEMPORAL_ADDRESS: temporal:7233
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
       IDENTITY_SERVICE_URL: http://identity-service:4000
+      INCIDENT_SERVICE_URL: http://incident-service:4200
+      INCIDENT_SERVICE_TOKEN: ${INCIDENT_SERVICE_TOKEN:?INCIDENT_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      # Guards this service's own machine-to-machine route
+      # (POST .../playbook-runs/system), called by incident-service's
+      # alert-ingested consumer.
+      PLAYBOOK_SERVICE_TOKEN: ${PLAYBOOK_SERVICE_TOKEN:?PLAYBOOK_SERVICE_TOKEN is required, copy .env.example to .env and set it}
       INTEGRATION_SERVICE_URL: http://integration-service:4300
       INTEGRATION_SERVICE_TOKEN: ${INTEGRATION_SERVICE_TOKEN:?INTEGRATION_SERVICE_TOKEN is required, copy .env.example to .env and set it}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       RABBITMQ_URL: amqp://rabbitmq:5672
     ports:
-      - "4200:4200"
+      - "4600:4600"
 
   audit-service:
     image: node:20-alpine
@@ -324,6 +374,7 @@ services:
     depends_on:
       - identity-service
       - incident-service
+      - playbook-service
       - audit-service
       - integration-service
       - alert-ingestion-service
@@ -331,6 +382,7 @@ services:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
       INCIDENT_SERVICE_URL: http://incident-service:4200
+      PLAYBOOK_SERVICE_URL: http://playbook-service:4600
       AUDIT_SERVICE_URL: http://audit-service:4400
       INTEGRATION_SERVICE_URL: http://integration-service:4300
       ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500
@@ -389,6 +441,7 @@ volumes:
   postgres_dev_data:
   identity_dev_node_modules:
   incident_dev_node_modules:
+  playbook_dev_node_modules:
   audit_dev_node_modules:
   integration_dev_node_modules:
   alert_ingestion_dev_node_modules:

@@ -1,16 +1,9 @@
 # Build context is the repo root (see docker-compose.yml), so all COPY paths
 # below are relative to the repo root, not this file's directory.
-#
-# Debian-based (node:20-slim), NOT node:20-alpine like every other service's
-# Dockerfile in this repo — @temporalio/core-bridge (src/temporal/) ships a
-# native binding built against glibc, and Alpine's musl libc can't load it
-# (confirmed: neither running unmodified nor with the "gcompat" compatibility
-# shim, which is missing symbols like gnu_get_libc_version the binding
-# actually needs — this isn't a "just add a package" fix on Alpine).
 
 # ---- Build stage: compile TypeScript + generate the Prisma client ----
-FROM node:20-slim AS build
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+FROM node:20-alpine AS build
+RUN apk add --no-cache openssl
 WORKDIR /app
 
 # @responderx/shared is a "file:../../shared" dependency (see package.json)
@@ -29,20 +22,22 @@ COPY backend/services/incident-service/prisma ./prisma
 COPY backend/services/incident-service/src ./src
 
 # prisma.config.ts loads src/config/env.ts, which strictly validates every
-# runtime env var (JWT secret, DB credentials) via zod — none of which exist
-# yet at build time (they're only injected at container runtime). `prisma
-# generate` never opens a DB connection or reads these values for anything
-# real, so placeholders here just satisfy that validation; they don't carry
-# over to the production stage below.
+# runtime env var (JWT secret, DB credentials, service tokens) via zod —
+# none of which exist yet at build time (they're only injected at container
+# runtime). `prisma generate` never opens a DB connection or reads these
+# values for anything real, so placeholders here just satisfy that
+# validation; they don't carry over to the production stage below.
 ENV DB_HOST=build DB_PORT=5432 DB_USER=build DB_PASSWORD=build DB_NAME=build \
-    JWT_ACCESS_SECRET=build_time_placeholder_not_used_at_runtime_000000
+    JWT_ACCESS_SECRET=build_time_placeholder_not_used_at_runtime_000000 \
+    INCIDENT_SERVICE_TOKEN=build_time_placeholder_000000 \
+    PLAYBOOK_SERVICE_TOKEN=build_time_placeholder_000000
 
 RUN npx prisma generate
 RUN npm run build
 
 # ---- Production stage ----
-FROM node:20-slim AS production
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+FROM node:20-alpine AS production
+RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
 

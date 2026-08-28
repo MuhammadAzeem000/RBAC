@@ -14,8 +14,6 @@ export const ROUTING_KEYS = {
   TASK_CREATED: "incident.task_created",
   TASK_COMPLETED: "incident.task_completed",
   EVIDENCE_ADDED: "incident.evidence_added",
-  PLAYBOOK_STARTED: "incident.playbook_started",
-  PLAYBOOK_COMPLETED: "incident.playbook_completed",
   RESOLVED: "incident.resolved",
   CLOSED: "incident.closed",
 } as const;

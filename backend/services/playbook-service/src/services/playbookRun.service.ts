@@ -40,6 +40,9 @@ const playbookRunSelect = {
   createdAt: true,
 } as const;
 
+// The caller (controller) verifies incidentId exists in incident-service
+// BEFORE calling this — see services/incidentClient.service.ts's
+// verifyIncidentExists, same shape as alert-ingestion-service's attach path.
 export async function startPlaybookRun(
   db: Prisma.TransactionClient,
   tenantId: bigint,
@@ -54,8 +57,6 @@ export async function startPlaybookRun(
 
   const run = await db.playbookRun.create({
     data: {
-      // See incident.service.ts::createIncident for why this is passed
-      // explicitly even though the tenant-scoping extension overwrites it.
       tenantId,
       incidentId,
       playbookVersionId: resolved.playbookVersionId,
@@ -63,11 +64,11 @@ export async function startPlaybookRun(
       playbookVersion: resolved.version,
       initiatedBy: actorUserId,
       requiresApproval: resolved.requiresApproval,
-      // The Temporal workflow itself now drives every subsequent state
+      // The Temporal workflow itself drives every subsequent state
       // transition (running/succeeded/failed/cancelled) via activities.ts —
       // this row starts at pending_approval regardless of requiresApproval;
       // the workflow flips it to "running" almost immediately if approval
-      // isn't required, same as the old synchronous behavior looked like.
+      // isn't required.
       state: "pending_approval",
       inputs: input.inputs as Prisma.InputJsonValue | undefined,
     },
@@ -93,10 +94,9 @@ export async function startPlaybookRun(
 
 export async function cancelPlaybookRun(
   db: Prisma.TransactionClient,
-  incidentId: bigint,
   runId: bigint,
 ): Promise<PlaybookRunResponse> {
-  const existing = await db.playbookRun.findFirst({ where: { id: runId, incidentId }, select: playbookRunSelect });
+  const existing = await db.playbookRun.findFirst({ where: { id: runId }, select: playbookRunSelect });
   if (!existing) {
     throw new HttpError(404, "Playbook run not found");
   }
@@ -120,4 +120,8 @@ export function listPlaybookRuns(db: Prisma.TransactionClient, incidentId: bigin
     select: playbookRunSelect,
     orderBy: { createdAt: "desc" },
   });
+}
+
+export function getPlaybookRunById(db: Prisma.TransactionClient, id: bigint): Promise<PlaybookRunResponse | null> {
+  return db.playbookRun.findFirst({ where: { id }, select: playbookRunSelect });
 }

@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Versioned playbook definitions, replacing the hardcoded PLAYBOOK_CATALOG
+// constant. `steps` stays an opaque JSON array — the real DAG/step model
+// (conditions, parallel branches, retries) would be a further evolution,
+// not attempted here; this only needs the catalog to be real, DB-backed,
+// and versioned.
+model Playbook {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  key         String  @db.VarChar(100)
+  name        String  @db.VarChar(150)
+  description String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  versions PlaybookVersion[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("playbooks")
+}
+
+// Immutable once created — a PlaybookRun stays bound to the exact version it
+// started with (version-pinning principle), even if a newer version is
+// published later.
+model PlaybookVersion {
+  id BigInt @id @default(autoincrement())
+
+  tenantId   BigInt @map("tenant_id")
+  playbookId BigInt @map("playbook_id")
+
+  version          String  @db.VarChar(20)
+  requiresApproval Boolean @default(false) @map("requires_approval")
+  // The Policy (by key) gating this version's run before its first step —
+  // null means no start gate. Individual steps can carry their own
+  // policyKey too (inside `steps`' JSON) for a mid-run gate.
+  startPolicyKey   String? @map("start_policy_key") @db.VarChar(100)
+  steps            Json    @default("[]") @db.Json
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  playbook     Playbook      @relation(fields: [playbookId], references: [id])
+  playbookRuns PlaybookRun[]
+
+  @@unique([playbookId, version])
+  @@index([tenantId])
+  @@map("playbook_versions")
+}
+
+// A named, reusable approval configuration. timeoutDuration/escalationAfter
+// are Temporal duration strings (e.g. "24 hours"), consumed by
+// src/temporal/workflows.ts's parseDurationToMs.
+model Policy {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  key  String @db.VarChar(100)
+  name String @db.VarChar(150)
+
+  timeoutDuration   String  @map("timeout_duration") @db.VarChar(50)
+  escalationAfter   String? @map("escalation_after") @db.VarChar(50)
+  escalationChannel String? @map("escalation_channel") @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("policies")
+}
+
+// Orchestration is real (Temporal — see src/temporal/): starting a run
+// starts a durable Workflow Execution that survives a worker restart.
+// playbookVersionId pins the run to the exact Playbook/PlaybookVersion it
+// started with; playbookKey/playbookVersion stay as a denormalized display
+// snapshot. temporalWorkflowId correlates this row to its Workflow
+// Execution. incidentId is a plain BigInt, not a relation — Incident lives
+// in incident-service's own database now (Phase 5.2's split); the two
+// services coordinate over HTTP (see services/incidentClient.service.ts),
+// same "no cross-DB FK" precedent as alert-ingestion-service's Alert.incidentId.
+model PlaybookRun {
+  id         BigInt @id @default(autoincrement())
+  tenantId   BigInt @map("tenant_id")
+  incidentId BigInt @map("incident_id")
+
+  playbookVersionId BigInt @map("playbook_version_id")
+  playbookKey       String @map("playbook_key") @db.VarChar(100)
+  playbookVersion   String @default("1.0") @map("playbook_version") @db.VarChar(20)
+
+  temporalWorkflowId String? @map("temporal_workflow_id") @db.VarChar(255)
+
+  state String @default("pending_approval") @db.VarChar(30)
+
+  // Cheap denormalized "does this run need approval at all" flag for list
+  // views — the actual gate(s)/decision(s)/expiry live in the Approval
+  // table below (one row per gate: the start, and/or individual steps).
+  requiresApproval Boolean @default(false) @map("requires_approval")
+
+  initiatedBy BigInt    @map("initiated_by")
+  startedAt   DateTime? @map("started_at") @db.Timestamp(6)
+  endedAt     DateTime? @map("ended_at") @db.Timestamp(6)
+
+  inputs         Json?   @db.Json
+  outputsSummary String? @map("outputs_summary") @db.Text
+  errorMessage   String? @map("error_message") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  version        PlaybookVersion @relation(fields: [playbookVersionId], references: [id])
+  stepExecutions StepExecution[]
+  approvals      Approval[]
+
+  @@index([tenantId])
+  @@index([incidentId])
+  @@index([playbookVersionId])
+  @@map("incident_playbook_runs")
+}
+
+// One row per approval gate a Temporal workflow execution actually waited
+// on — the playbook-start gate (stepKey null) or an individual step's gate
+// (stepKey set). Written/read exclusively by Activities
+// (src/temporal/activities.ts) and the approvals HTTP API
+// (POST /api/v1/approvals/:id/decision).
+model Approval {
+  id BigInt @id @default(autoincrement())
+
+  tenantId      BigInt @map("tenant_id")
+  playbookRunId BigInt @map("playbook_run_id")
+
+  stepKey   String? @map("step_key") @db.VarChar(100)
+  policyKey String  @map("policy_key") @db.VarChar(100)
+
+  requestorUserId BigInt  @map("requestor_user_id")
+  approverUserId  BigInt? @map("approver_user_id")
+
+  decision String @default("pending") @db.VarChar(20)
+
+  requestedAt DateTime  @default(now()) @map("requested_at") @db.Timestamp(6)
+  decidedAt   DateTime? @map("decided_at") @db.Timestamp(6)
+  expiresAt   DateTime? @map("expires_at") @db.Timestamp(6)
+  escalatedAt DateTime? @map("escalated_at") @db.Timestamp(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  playbookRun PlaybookRun @relation(fields: [playbookRunId], references: [id])
+
+  @@index([tenantId])
+  @@index([playbookRunId])
+  @@index([decision])
+  @@map("approvals")
+}
+
+// One row per playbook step actually executed by the Temporal workflow —
+// the per-step audit trail (mirrored in @responderx/shared's execution.ts).
+// Written by Activities (src/temporal/activities.ts), never directly by an
+// HTTP route.
+model StepExecution {
+  id            BigInt @id @default(autoincrement())
+  tenantId      BigInt @map("tenant_id")
+  playbookRunId BigInt @map("playbook_run_id")
+
+  stepKey  String @map("step_key") @db.VarChar(100)
+  stepName String @map("step_name") @db.VarChar(150)
+  status   String @default("pending") @db.VarChar(20)
+
+  input  Json?   @db.Json
+  output Json?   @db.Json
+  error  String? @db.Text
+
+  attempts Int @default(0)
+
+  startedAt DateTime? @map("started_at") @db.Timestamp(6)
+  endedAt   DateTime? @map("ended_at") @db.Timestamp(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  playbookRun PlaybookRun @relation(fields: [playbookRunId], references: [id])
+
+  @@index([tenantId])
+  @@index([playbookRunId])
+  @@map("step_executions")
+}
+
+// Transactional outbox for CENTRAL audit-service delivery — standard
+// pattern, identical to every other service's since Phase 1.
+model OutboxEvent {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  eventId       String  @unique @map("event_id") @db.VarChar(36)
+  eventType     String  @map("event_type") @db.VarChar(100)
+  aggregateType String  @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String  @map("aggregate_id") @db.VarChar(100)
+
+  actorId   String? @map("actor_id") @db.VarChar(100)
+  actorType String  @default("USER") @map("actor_type") @db.VarChar(20)
+
+  action       String @db.VarChar(50)
+  resourceType String @map("resource_type") @db.VarChar(50)
+  resourceId   String @map("resource_id") @db.VarChar(100)
+
+  metadata Json? @db.Json
+  payload  Json? @db.Json
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamp(6)
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error") @db.Text
+
+  @@index([publishedAt])
+  @@index([tenantId])
+  @@map("outbox_events")
+}

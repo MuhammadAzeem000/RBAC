@@ -13,7 +13,6 @@ import {
 import { createIncidentInTx } from "../services/incident.service";
 import { writeOutboxEvent } from "../services/outbox.service";
 import { recordTimelineEvent } from "../services/timeline.service";
-import { startPlaybookRun } from "../services/playbookRun.service";
 
 const ALERT_DLX = "incident-service.alert-events.dlx";
 const ALERT_DLQ = "incident-service.alert-events.dlq";
@@ -25,20 +24,7 @@ const PROCESSING_RETRY_DELAY_MS = 500;
 // Same tenant-scoped model list tenantContext.ts grants an authenticated
 // request — this consumer has no request to inherit one from, so it builds
 // its own from the event's own tenantId, mirroring src/temporal/activities.ts.
-const TENANT_SCOPED_MODELS = [
-  "Incident",
-  "Task",
-  "Evidence",
-  "Comment",
-  "PlaybookRun",
-  "TimelineEvent",
-  "OutboxEvent",
-  "Playbook",
-  "PlaybookVersion",
-  "StepExecution",
-  "Policy",
-  "Approval",
-] as const;
+const TENANT_SCOPED_MODELS = ["Incident", "Task", "Evidence", "Comment", "TimelineEvent", "OutboxEvent"] as const;
 
 function scopedDb(tenantId: bigint) {
   return forTenant(prisma, tenantId, TENANT_SCOPED_MODELS);
@@ -116,6 +102,28 @@ export async function connectAlertConsumer(): Promise<void> {
 
 function synthesizeTitle(source: string, externalId: string): string {
   return `${source} alert ${externalId}`;
+}
+
+// This consumer has no user JWT (it runs off a RabbitMQ message, not a
+// request) to start a playbook run with — calls playbook-service's own
+// machine-to-machine route instead. Throws on failure (including a 4xx for
+// an unknown playbookKey), same as the local call this replaced; the
+// caller's try/catch handles that identically either way.
+async function startPlaybookRunViaPlaybookService(
+  tenantId: string,
+  incidentId: string,
+  playbookKey: string,
+  requestorId: string,
+): Promise<void> {
+  const response = await fetch(`${env.PLAYBOOK_SERVICE_URL}/api/v1/playbook-runs/system`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Service-Token": env.PLAYBOOK_SERVICE_TOKEN },
+    body: JSON.stringify({ tenantId, incidentId, playbookKey, requestorId }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`playbook-service returned HTTP ${response.status}: ${body}`);
+  }
 }
 
 async function replyFailed(tenantId: bigint, alertId: string, reason: string): Promise<void> {
@@ -207,20 +215,18 @@ async function handleAlertIngested(event: z.infer<typeof alertIngestedSchema>): 
 
   // A bad/unknown playbookKey must not undo the successful incident
   // creation this reply is about to confirm — logged only, same as the old
-  // (Phase 5) controller's handling of this same field.
+  // (Phase 5) controller's handling of this same field. The "playbook
+  // started" timeline entry is written by playbook-service itself (via the
+  // same M2M route its own HTTP-triggered runs use) — not duplicated here,
+  // see the Phase 5.2 plan's decision 6 on avoiding double timeline writes.
   if (triggerPlaybookKey) {
     try {
-      const run = await startPlaybookRun(db, tenantId, incidentId, { playbookKey: triggerPlaybookKey }, actorUserId);
-      await recordTimelineEvent(db, tenantId, {
-        incidentId,
-        eventType: "playbook_started",
-        actorUserId,
-        summary:
-          run.state === "pending_approval"
-            ? `Playbook "${run.playbookKey}" started, awaiting approval`
-            : `Playbook "${run.playbookKey}" started`,
-        metadata: { runId: run.id.toString(), state: run.state },
-      });
+      await startPlaybookRunViaPlaybookService(
+        tenantId.toString(),
+        incidentId.toString(),
+        triggerPlaybookKey,
+        actorUserId.toString(),
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`triggerPlaybookKey "${triggerPlaybookKey}" failed for incident ${incidentId}:`, message);

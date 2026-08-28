@@ -20,3 +20,6 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'integration_db')\gexe
 
 SELECT 'CREATE DATABASE alert_ingestion_db'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'alert_ingestion_db')\gexec
+
+SELECT 'CREATE DATABASE playbook_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'playbook_db')\gexec

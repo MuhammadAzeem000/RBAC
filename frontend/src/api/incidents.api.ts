@@ -8,8 +8,6 @@ import type {
   IncidentEvidence,
   IncidentListQuery,
   IncidentTask,
-  PlaybookCatalogEntry,
-  PlaybookRun,
   TimelineEvent,
   UpdateIncidentInput,
 } from '@/types/incident'
@@ -48,15 +46,6 @@ export const incidentsApi = {
     id: string,
     input: { filename: string; fileType?: string; storageRef: string; checksum?: string; provenance?: string },
   ) => api.post<IncidentEvidence>(`${base}/${id}/evidence`, input).then((r) => r.data),
-
-  playbookCatalog: () =>
-    api.get<{ data: PlaybookCatalogEntry[] }>(`${base}/playbook-catalog`).then((r) => r.data.data),
-  listPlaybookRuns: (id: string) =>
-    api.get<{ data: PlaybookRun[] }>(`${base}/${id}/playbook-runs`).then((r) => r.data.data),
-  startPlaybookRun: (id: string, playbookKey: string) =>
-    api.post<PlaybookRun>(`${base}/${id}/playbook-runs`, { playbookKey }).then((r) => r.data),
-  approvePlaybookRun: (id: string, runId: string) =>
-    api.post<PlaybookRun>(`${base}/${id}/playbook-runs/${runId}/approve`).then((r) => r.data),
 
   getTimeline: (id: string, query: { page?: number; pageSize?: number }) =>
     api

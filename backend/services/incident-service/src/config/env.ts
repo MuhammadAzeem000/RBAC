@@ -20,13 +20,17 @@ const envSchema = z.object({
   IDENTITY_SERVICE_URL: z.string().url().default("http://localhost:4000"),
   CORS_ORIGIN: z.string().default("http://localhost:5173,http://localhost:5174"),
   RABBITMQ_URL: z.string().min(1).default("amqp://localhost:5672"),
-  // host:port, not a URL — this is what @temporalio/client's Connection.connect()
-  // and @temporalio/worker's NativeConnection.connect() both expect for `address`.
-  TEMPORAL_ADDRESS: z.string().min(1).default("localhost:7233"),
-  // Phase 3: the connector runtime a real (non-simulated) playbook step
-  // calls — see temporal/activities.ts's runStep.
-  INTEGRATION_SERVICE_URL: z.string().url().default("http://localhost:4300"),
-  INTEGRATION_SERVICE_TOKEN: z.string().min(16),
+  // Guards POST /api/v1/incidents/:id/timeline — the one route called
+  // machine-to-machine, from playbook-service's Temporal Activities (Phase
+  // 5.2's split moved Playbook/Orchestration/Approval out; TimelineEvent
+  // stayed here). See middlewares/requireServiceToken.ts.
+  INCIDENT_SERVICE_TOKEN: z.string().min(16),
+  // The reverse direction: events/alertConsumer.ts's triggerPlaybookKey
+  // handling has no user JWT (it runs from a RabbitMQ consumer, not a
+  // request) to start a playbook run with, so it calls playbook-service's
+  // own machine-to-machine route instead.
+  PLAYBOOK_SERVICE_URL: z.string().url().default("http://localhost:4600"),
+  PLAYBOOK_SERVICE_TOKEN: z.string().min(16),
 });
 
 const parsed = envSchema.parse(process.env);

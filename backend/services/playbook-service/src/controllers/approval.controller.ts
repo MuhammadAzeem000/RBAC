@@ -2,14 +2,14 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { decideApprovalSchema, listApprovalsQuerySchema } from "../interfaces/approval";
 import * as approvalService from "../services/approval.service";
-import { recordTimelineEvent } from "../services/timeline.service";
-import { parseBigIntId, parseQuery } from "../utils";
+import { parseQuery } from "../utils";
+import { HttpError } from "../middlewares/errorHandler";
+import { parseBigIntId } from "../utils";
 
 export async function decideApproval(req: Request, res: Response) {
   const approvalId = parseBigIntId(req.params.id);
   if (approvalId === null) {
-    res.status(400).json({ error: "Invalid approval id" });
-    return;
+    throw new HttpError(400, "Invalid approval id");
   }
 
   const result = decideApprovalSchema.safeParse(req.body);
@@ -18,17 +18,15 @@ export async function decideApproval(req: Request, res: Response) {
     return;
   }
 
+  // Signals the Temporal workflow rather than updating the row directly —
+  // approval.service.ts does a short wait-then-refetch so the HTTP response
+  // still reflects the update in the common case. The timeline entry for
+  // this decision is written exactly once, by temporal/activities.ts's
+  // recordDecision (the authoritative write, firing after the workflow
+  // actually processes the signal) — this controller deliberately does NOT
+  // also write one; the old incident-service code did, producing two
+  // timeline rows per decision (see the Phase 5.2 plan's decision 6).
   const approval = await approvalService.decideApproval(req.db, approvalId, result.data.decision, req.auth!.userId);
-
-  await recordTimelineEvent(req.db, req.auth!.tenantId, {
-    incidentId: approval.incidentId,
-    eventType: result.data.decision === "approved" ? "approval_approved" : "approval_rejected",
-    actorUserId: req.auth!.userId,
-    summary: approval.stepKey
-      ? `Approval for step "${approval.stepKey}" ${result.data.decision}`
-      : `Playbook start approval ${result.data.decision}`,
-    metadata: { approvalId: approval.id.toString() },
-  });
 
   res.json(approval);
 }

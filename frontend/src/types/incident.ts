@@ -159,6 +159,10 @@ export interface PlaybookCatalogEntry {
 
 export type PlaybookRunState = 'pending_approval' | 'running' | 'succeeded' | 'failed' | 'cancelled'
 
+// playbook-service's response shape (Phase 5.2's decomposition — playbook
+// runs no longer live in incident-service). approvedBy/approvedAt were
+// dropped from the backend back in Phase 4 (replaced by the Approval table
+// below) but never removed from this type until now.
 export interface PlaybookRun {
   id: string
   incidentId: string
@@ -166,8 +170,6 @@ export interface PlaybookRun {
   playbookVersion: string
   state: PlaybookRunState
   requiresApproval: boolean
-  approvedBy: string | null
-  approvedAt: string | null
   initiatedBy: string
   startedAt: string | null
   endedAt: string | null
@@ -175,6 +177,29 @@ export interface PlaybookRun {
   outputsSummary: string | null
   errorMessage: string | null
   createdAt: string
+}
+
+export interface StartPlaybookRunInput {
+  incidentId: string
+  playbookKey: string
+  inputs?: Record<string, unknown>
+}
+
+export type ApprovalDecision = 'pending' | 'approved' | 'rejected' | 'expired'
+
+export interface ApprovalResponse {
+  id: string
+  playbookRunId: string
+  incidentId: string
+  stepKey: string | null
+  policyKey: string
+  requestorUserId: string
+  approverUserId: string | null
+  decision: ApprovalDecision
+  requestedAt: string
+  decidedAt: string | null
+  expiresAt: string | null
+  escalatedAt: string | null
 }
 
 export interface TimelineEvent {

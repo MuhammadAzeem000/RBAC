@@ -135,13 +135,16 @@ services:
       start_period: 10s
 
   # SOAR incident management MVP (see SOAR_Incident_Management_MVP.pdf) —
-  # incidents, alerts, tasks, evidence, comments, playbook runs, and
-  # timeline/audit. Owns its own database (incident_db, same Postgres server
-  # as identity-service but a genuinely separate database — no shared
-  # schema). Has no RBAC tables of its own; every request's permissions are
-  # checked by calling identity-service's GET /api/auth/me/modules with the
-  # caller's own access token, which is why it depends on identity-service
-  # being up, not just Postgres/RabbitMQ.
+  # incidents, tasks, evidence, comments, and timeline/audit. Owns its own
+  # database (incident_db, same Postgres server as identity-service but a
+  # genuinely separate database — no shared schema). Has no RBAC tables of
+  # its own; every request's permissions are checked by calling
+  # identity-service's GET /api/auth/me/modules with the caller's own access
+  # token, which is why it depends on identity-service being up, not just
+  # Postgres/RabbitMQ. Also exposes one machine-to-machine route
+  # (POST .../timeline, guarded by INCIDENT_SERVICE_TOKEN) that
+  # playbook-service's Temporal Activities call — see
+  # src/middlewares/requireServiceToken.ts.
   incident-service:
     build:
       context: .
@@ -154,10 +157,6 @@ services:
         condition: service_healthy
       identity-service:
         condition: service_healthy
-      temporal:
-        condition: service_started
-      integration-service:
-        condition: service_healthy
     environment:
       PORT: 4200
       NODE_ENV: production
@@ -166,17 +165,67 @@ services:
       DB_USER: ${DB_USER:-commtel}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
       DB_NAME: incident_db
-      TEMPORAL_ADDRESS: temporal:7233
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
       IDENTITY_SERVICE_URL: http://identity-service:4000
-      INTEGRATION_SERVICE_URL: http://integration-service:4300
-      INTEGRATION_SERVICE_TOKEN: ${INTEGRATION_SERVICE_TOKEN:?INTEGRATION_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      INCIDENT_SERVICE_TOKEN: ${INCIDENT_SERVICE_TOKEN:?INCIDENT_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      PLAYBOOK_SERVICE_URL: http://playbook-service:4600
+      PLAYBOOK_SERVICE_TOKEN: ${PLAYBOOK_SERVICE_TOKEN:?PLAYBOOK_SERVICE_TOKEN is required, copy .env.example to .env and set it}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
       RABBITMQ_URL: amqp://rabbitmq:5672
     ports:
       - "4200:4200"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4200/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Phase 5.2's decomposition slice 2 — the Temporal-based orchestration
+  # engine, playbook catalog, and approval-gate system, split out of
+  # incident-service. Debian-based (node:20-slim) — @temporalio/core-bridge
+  # ships a native binding built against glibc that Alpine's musl libc can't
+  # load (confirmed when this subsystem still lived in incident-service).
+  playbook-service:
+    build:
+      context: .
+      dockerfile: backend/services/playbook-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      integration-service:
+        condition: service_healthy
+      incident-service:
+        condition: service_healthy
+    environment:
+      PORT: 4600
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: playbook_db
+      TEMPORAL_ADDRESS: temporal:7233
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      INCIDENT_SERVICE_URL: http://incident-service:4200
+      INCIDENT_SERVICE_TOKEN: ${INCIDENT_SERVICE_TOKEN:?INCIDENT_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      PLAYBOOK_SERVICE_TOKEN: ${PLAYBOOK_SERVICE_TOKEN:?PLAYBOOK_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      INTEGRATION_SERVICE_URL: http://integration-service:4300
+      INTEGRATION_SERVICE_TOKEN: ${INTEGRATION_SERVICE_TOKEN:?INTEGRATION_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4600:4600"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4600/health"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -301,11 +350,12 @@ services:
       start_period: 10s
 
   # Reverse proxy: the single origin the frontend talks to. Routes
-  # "/api/v1/alerts*" (alert-ingestion-service) and the rest of "/api/v1/*"
-  # (incident-service's documented REST surface), "/api/audit-logs*"
-  # (audit-service, the single authoritative audit-log store), and
-  # "/api/connectors*" (integration-service) to their respective services,
-  # and everything else under "/api" to identity-service.
+  # "/api/v1/alerts*" (alert-ingestion-service), "/api/v1/playbook-catalog*"
+  # /"/api/v1/playbook-runs*"/"/api/v1/approvals*" (playbook-service) and the
+  # rest of "/api/v1/*" (incident-service's documented REST surface),
+  # "/api/audit-logs*" (audit-service, the single authoritative audit-log
+  # store), and "/api/connectors*" (integration-service) to their respective
+  # services, and everything else under "/api" to identity-service.
   api-gateway:
     build:
       context: .
@@ -315,6 +365,8 @@ services:
       identity-service:
         condition: service_healthy
       incident-service:
+        condition: service_healthy
+      playbook-service:
         condition: service_healthy
       audit-service:
         condition: service_healthy
@@ -326,6 +378,7 @@ services:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
       INCIDENT_SERVICE_URL: http://incident-service:4200
+      PLAYBOOK_SERVICE_URL: http://playbook-service:4600
       AUDIT_SERVICE_URL: http://audit-service:4400
       INTEGRATION_SERVICE_URL: http://integration-service:4300
       ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500

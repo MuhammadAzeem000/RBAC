@@ -11,18 +11,7 @@ import { forTenant } from "@responderx/shared";
 import { prisma } from "../../config/prisma";
 import * as incidentService from "../../services/incident.service";
 
-const TENANT_SCOPED_MODELS = [
-  "Incident",
-  "Alert",
-  "Task",
-  "Evidence",
-  "Comment",
-  "PlaybookRun",
-  "TimelineEvent",
-  "OutboxEvent",
-  "Playbook",
-  "PlaybookVersion",
-] as const;
+const TENANT_SCOPED_MODELS = ["Incident", "Task", "Evidence", "Comment", "TimelineEvent", "OutboxEvent"] as const;
 
 function uniqueTitle(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
@@ -99,24 +88,6 @@ describe("tenant isolation", () => {
 
     await expect(incidentService.assertIncidentExists(dbB, incident.id)).rejects.toThrow("Incident not found");
     await expect(incidentService.assertIncidentExists(dbA, incident.id)).resolves.toBeUndefined();
-  });
-
-  it("a Playbook seeded for tenant A is invisible to tenant B's catalog", async () => {
-    const dbA = dbFor(tenantAId);
-    const dbB = dbFor(tenantBId);
-
-    const playbook = await dbA.playbook.create({
-      data: { tenantId: tenantAId, key: uniqueTitle("enrich-ioc"), name: "Enrich IOC" },
-    });
-    await dbA.playbookVersion.create({
-      data: { tenantId: tenantAId, playbookId: playbook.id, version: "1.0", requiresApproval: false },
-    });
-
-    const seenByA = await dbA.playbook.findFirst({ where: { id: playbook.id } });
-    const seenByB = await dbB.playbook.findFirst({ where: { id: playbook.id } });
-
-    expect(seenByA?.id).toBe(playbook.id);
-    expect(seenByB).toBeNull();
   });
 
   it("create stamps the caller's tenantId regardless of what's passed", async () => {

@@ -1,19 +1,16 @@
 // Dev/ops convenience, not runtime application code: seeds PLAYBOOK_SEED_DATA
-// and POLICY_SEED_DATA (constants/incidents.ts) as this tenant's starting
+// and POLICY_SEED_DATA (constants/playbooks.ts) as this tenant's starting
 // Playbook/PlaybookVersion catalog and approval policies. Run with
 // `npm run db:seed`, or `SEED_TENANT_ID=<id> npm run db:seed` to target a
 // specific tenant (defaults to 1, the identity-service `default` tenant
 // created by its own first bootstrap).
 //
 // There's no automatic per-tenant seeding yet — a newly registered tenant
-// starts with an empty catalog until this is run against it. Wiring
-// incident-service to auto-seed on the TENANT_CREATED event
-// identity-service already publishes is a natural follow-up, not built here
-// to keep this phase's scope to "make the catalog real," not "automate
-// onboarding."
+// starts with an empty catalog until this is run against it (same known gap
+// as before this service split — unaffected by it).
 import { Prisma } from "../src/generated/prisma/client";
 import { prisma } from "../src/config/prisma";
-import { PLAYBOOK_SEED_DATA, POLICY_SEED_DATA } from "../src/constants/incidents";
+import { PLAYBOOK_SEED_DATA, POLICY_SEED_DATA } from "../src/constants/playbooks";
 
 async function main() {
   const tenantId = BigInt(process.env.SEED_TENANT_ID ?? "1");

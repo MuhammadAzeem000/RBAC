@@ -6,20 +6,7 @@ import { prisma } from "../config/prisma";
 // which excludes global platform taxonomy) — see the tenantId column added
 // to every table in prisma/schema.prisma. Playbook/PlaybookVersion are
 // scoped too, since each tenant has its own playbook catalog.
-const TENANT_SCOPED_MODELS = [
-  "Incident",
-  "Task",
-  "Evidence",
-  "Comment",
-  "PlaybookRun",
-  "TimelineEvent",
-  "OutboxEvent",
-  "Playbook",
-  "PlaybookVersion",
-  "StepExecution",
-  "Policy",
-  "Approval",
-] as const;
+const TENANT_SCOPED_MODELS = ["Incident", "Task", "Evidence", "Comment", "TimelineEvent", "OutboxEvent"] as const;
 
 export type TenantScopedPrisma = typeof prisma;
 

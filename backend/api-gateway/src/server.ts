@@ -28,6 +28,34 @@ app.use(
   }),
 );
 
+// Playbook catalog/runs and approvals moved into their own service (Phase
+// 5.2's decomposition slice 2) — same prefix-ordering requirement as the
+// alerts carve-out above.
+app.use(
+  "/api/v1/playbook-catalog",
+  createProxyMiddleware({
+    target: env.PLAYBOOK_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/playbook-catalog/" },
+  }),
+);
+app.use(
+  "/api/v1/playbook-runs",
+  createProxyMiddleware({
+    target: env.PLAYBOOK_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/playbook-runs/" },
+  }),
+);
+app.use(
+  "/api/v1/approvals",
+  createProxyMiddleware({
+    target: env.PLAYBOOK_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/approvals/" },
+  }),
+);
+
 app.use(
   "/api/v1",
   createProxyMiddleware({
@@ -66,8 +94,11 @@ app.use(
 
 app.listen(env.PORT, () => {
   console.log(`api-gateway listening on port ${env.PORT}`);
-  console.log(`  /api/v1/alerts/* -> ${env.ALERT_INGESTION_SERVICE_URL}`);
-  console.log(`  /api/v1/*        -> ${env.INCIDENT_SERVICE_URL}`);
+  console.log(`  /api/v1/alerts/*           -> ${env.ALERT_INGESTION_SERVICE_URL}`);
+  console.log(`  /api/v1/playbook-catalog/* -> ${env.PLAYBOOK_SERVICE_URL}`);
+  console.log(`  /api/v1/playbook-runs/*    -> ${env.PLAYBOOK_SERVICE_URL}`);
+  console.log(`  /api/v1/approvals/*        -> ${env.PLAYBOOK_SERVICE_URL}`);
+  console.log(`  /api/v1/*                  -> ${env.INCIDENT_SERVICE_URL}`);
   console.log(`  /api/audit-logs* -> ${env.AUDIT_SERVICE_URL}`);
   console.log(`  /api/connectors* -> ${env.INTEGRATION_SERVICE_URL}`);
   console.log(`  /api/*           -> ${env.IDENTITY_SERVICE_URL}`);

@@ -1,27 +1,20 @@
 {
   "name": "incident-service",
   "version": "1.0.0",
-  "description": "SOAR incident management MVP — incidents, alerts, tasks, evidence, comments, playbook runs, and timeline/audit",
+  "description": "SOAR incident management MVP — incidents, tasks, evidence, comments, and timeline/audit",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "dev:polling": "nodemon --legacy-watch --exec tsx src/server.ts",
-    "dev:nodemon": "nodemon --exec tsx src/server.ts",
     "test": "jest",
-    "test:integration": "jest --config jest.integration.config.js",
-    "db:seed": "tsx prisma/seed.ts"
+    "test:integration": "jest --config jest.integration.config.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@responderx/shared": "file:../../shared",
-    "@temporalio/activity": "^1.22.0",
-    "@temporalio/client": "^1.22.0",
-    "@temporalio/common": "^1.22.0",
-    "@temporalio/worker": "^1.22.0",
-    "@temporalio/workflow": "^1.22.0",
     "amqplib": "^0.10.9",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
