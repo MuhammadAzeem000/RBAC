@@ -14,6 +14,7 @@ const envSchema = z.object({
   AUDIT_SERVICE_URL: z.string().url().default("http://localhost:4400"),
   INTEGRATION_SERVICE_URL: z.string().url().default("http://localhost:4300"),
   ALERT_INGESTION_SERVICE_URL: z.string().url().default("http://localhost:4500"),
+  NORMALIZATION_SERVICE_URL: z.string().url().default("http://localhost:4700"),
 });
 
 export const env = envSchema.parse(process.env);

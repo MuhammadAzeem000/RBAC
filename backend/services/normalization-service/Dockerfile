@@ -14,19 +14,19 @@ WORKDIR /app
 COPY backend/shared /shared
 RUN npm --prefix /shared ci && npm --prefix /shared run build
 
-COPY backend/services/alert-ingestion-service/package*.json ./
+COPY backend/services/normalization-service/package*.json ./
 RUN npm ci
 
-COPY backend/services/alert-ingestion-service/tsconfig.json backend/services/alert-ingestion-service/prisma.config.ts ./
-COPY backend/services/alert-ingestion-service/prisma ./prisma
-COPY backend/services/alert-ingestion-service/src ./src
+COPY backend/services/normalization-service/tsconfig.json backend/services/normalization-service/prisma.config.ts ./
+COPY backend/services/normalization-service/prisma ./prisma
+COPY backend/services/normalization-service/src ./src
 
 # prisma.config.ts loads src/config/env.ts, which strictly validates every
-# runtime env var (JWT secret, DB credentials) via zod — none of which exist
-# yet at build time (they're only injected at container runtime). `prisma
-# generate` never opens a DB connection or reads these values for anything
-# real, so placeholders here just satisfy that validation; they don't carry
-# over to the production stage below.
+# runtime env var (JWT secret, DB credentials, service tokens) via zod —
+# none of which exist yet at build time (they're only injected at container
+# runtime). `prisma generate` never opens a DB connection or reads these
+# values for anything real, so placeholders here just satisfy that
+# validation; they don't carry over to the production stage below.
 ENV DB_HOST=build DB_PORT=5432 DB_USER=build DB_PASSWORD=build DB_NAME=build \
     JWT_ACCESS_SECRET=build_time_placeholder_not_used_at_runtime_000000 \
     ALERT_INGESTION_SERVICE_TOKEN=build_time_placeholder_000000
@@ -41,7 +41,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY --from=build /shared /shared
-COPY backend/services/alert-ingestion-service/package*.json ./
+COPY backend/services/normalization-service/package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
@@ -49,9 +49,9 @@ COPY --from=build /app/dist ./dist
 # loader transpiles it on the fly), so the source tree must ship alongside dist.
 COPY --from=build /app/src ./src
 COPY --from=build /app/prisma ./prisma
-COPY backend/services/alert-ingestion-service/prisma.config.ts ./
+COPY backend/services/normalization-service/prisma.config.ts ./
 
-EXPOSE 4500
+EXPOSE 4700
 
-# alert-ingestion-service owns its own database (alert_ingestion_db) and its own migrations.
+# normalization-service owns its own database (normalization_db) and its own migrations.
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]

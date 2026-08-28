@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// A per-tenant, per-vendor inbound webhook endpoint. `token` is the sole
+// credential (a vendor SIEM/EDR can't send a ResponderX JWT) — resolved by
+// the receiver route (POST /api/v1/normalize/:vendor/:token) to a tenantId
+// BEFORE any tenant scoping is possible, so lookups against this table are
+// deliberately global (by token), not forTenant()-scoped. Mirrors
+// integration-service's Connector row, simplified to a shared secret only
+// (no OAuth/credential rotation).
+model WebhookSource {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  vendor String @db.VarChar(50)
+  label  String @db.VarChar(150)
+  token  String @unique @db.VarChar(64)
+
+  createdBy  BigInt    @map("created_by")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamp(6)
+
+  @@index([tenantId])
+  @@map("webhook_sources")
+}
+
+// Transactional outbox for CENTRAL audit-service delivery — standard
+// pattern, identical to every other service's since Phase 1.
+model OutboxEvent {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  eventId       String @unique @map("event_id") @db.VarChar(36)
+  eventType     String @map("event_type") @db.VarChar(100)
+  aggregateType String @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String @map("aggregate_id") @db.VarChar(100)
+
+  actorId   String? @map("actor_id") @db.VarChar(100)
+  actorType String  @default("USER") @map("actor_type") @db.VarChar(20)
+
+  action       String @db.VarChar(50)
+  resourceType String @map("resource_type") @db.VarChar(50)
+  resourceId   String @map("resource_id") @db.VarChar(100)
+
+  metadata Json? @db.Json
+  payload  Json? @db.Json
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamp(6)
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error") @db.Text
+
+  @@index([publishedAt])
+  @@index([tenantId])
+  @@map("outbox_events")
+}

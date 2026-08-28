@@ -56,6 +56,28 @@ app.use(
   }),
 );
 
+// Normalization moved into its own service (Phase 5.3's decomposition
+// slice 3) — same prefix-ordering requirement as the carve-outs above.
+// "/api/v1/normalize/*" is the inbound vendor-webhook receiver (no
+// ResponderX auth — normalization-service checks its own URL token) and
+// "/api/v1/webhook-sources/*" is the human-facing management API.
+app.use(
+  "/api/v1/webhook-sources",
+  createProxyMiddleware({
+    target: env.NORMALIZATION_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/webhook-sources/" },
+  }),
+);
+app.use(
+  "/api/v1/normalize",
+  createProxyMiddleware({
+    target: env.NORMALIZATION_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/normalize/" },
+  }),
+);
+
 app.use(
   "/api/v1",
   createProxyMiddleware({
@@ -98,6 +120,8 @@ app.listen(env.PORT, () => {
   console.log(`  /api/v1/playbook-catalog/* -> ${env.PLAYBOOK_SERVICE_URL}`);
   console.log(`  /api/v1/playbook-runs/*    -> ${env.PLAYBOOK_SERVICE_URL}`);
   console.log(`  /api/v1/approvals/*        -> ${env.PLAYBOOK_SERVICE_URL}`);
+  console.log(`  /api/v1/webhook-sources/*  -> ${env.NORMALIZATION_SERVICE_URL}`);
+  console.log(`  /api/v1/normalize/*        -> ${env.NORMALIZATION_SERVICE_URL}`);
   console.log(`  /api/v1/*                  -> ${env.INCIDENT_SERVICE_URL}`);
   console.log(`  /api/audit-logs* -> ${env.AUDIT_SERVICE_URL}`);
   console.log(`  /api/connectors* -> ${env.INTEGRATION_SERVICE_URL}`);

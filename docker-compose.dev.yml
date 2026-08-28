@@ -350,10 +350,53 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
       IDENTITY_SERVICE_URL: http://identity-service:4000
       INCIDENT_SERVICE_URL: http://incident-service:4200
+      # Phase 5.3: guards the machine-to-machine POST .../alerts/system
+      # route normalization-service calls — see
+      # src/middlewares/requireServiceToken.ts.
+      ALERT_INGESTION_SERVICE_TOKEN: ${ALERT_INGESTION_SERVICE_TOKEN:?ALERT_INGESTION_SERVICE_TOKEN is required, copy .env.example to .env and set it}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       RABBITMQ_URL: amqp://rabbitmq:5672
     ports:
       - "4500:4500"
+
+  # Phase 5.3's decomposition slice 3 — accepts vendor-shaped SIEM/EDR
+  # webhook payloads (Splunk/Sentinel/CrowdStrike/generic — see
+  # src/parsers/) and maps them into the canonical Alert/Entity shape,
+  # handing off to alert-ingestion-service's own machine-to-machine route.
+  normalization-service:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
+    volumes:
+      - ./backend/services/normalization-service:/app
+      - normalization_dev_node_modules:/app/node_modules
+      - ./backend/shared:/shared
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_started
+      alert-ingestion-service:
+        condition: service_started
+    environment:
+      PORT: 4700
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: normalization_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500
+      ALERT_INGESTION_SERVICE_TOKEN: ${ALERT_INGESTION_SERVICE_TOKEN:?ALERT_INGESTION_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4700:4700"
 
   # No healthcheck on the services above (a bare node:20-alpine image has
   # no wget/curl without an extra apk add), so downstream depends_on here use
@@ -378,6 +421,7 @@ services:
       - audit-service
       - integration-service
       - alert-ingestion-service
+      - normalization-service
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
@@ -386,6 +430,7 @@ services:
       AUDIT_SERVICE_URL: http://audit-service:4400
       INTEGRATION_SERVICE_URL: http://integration-service:4300
       ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500
+      NORMALIZATION_SERVICE_URL: http://normalization-service:4700
     ports:
       - "8090:8000"
 
@@ -445,6 +490,7 @@ volumes:
   audit_dev_node_modules:
   integration_dev_node_modules:
   alert_ingestion_dev_node_modules:
+  normalization_dev_node_modules:
   gateway_dev_node_modules:
   notification_dev_node_modules:
   frontend_dev_node_modules:

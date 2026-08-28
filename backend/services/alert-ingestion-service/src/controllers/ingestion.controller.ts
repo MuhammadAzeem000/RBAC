@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { HttpError } from "../middlewares/errorHandler";
-import { ingestAlertRequestSchema } from "../interfaces/ingestion";
+import { ingestAlertRequestSchema, ingestAlertSystemSchema } from "../interfaces/ingestion";
 import { getAlertById, ingestAlert, listAlertsByIncident } from "../services/ingestion.service";
 import { parseBigIntId } from "../utils";
 
@@ -24,6 +24,30 @@ export async function ingestAlertRoute(req: Request, res: Response) {
   // only just been handed off via the outbox, so 202 is the honest status —
   // the caller polls GET /:id to see it move to "linked".
   res.status(mode === "attached" ? 201 : 202).json({ alert, deduped: false });
+}
+
+// Machine-to-machine — normalization-service calls this once it's parsed a
+// vendor SIEM/EDR webhook into the canonical shape (see
+// middlewares/requireServiceToken.ts). Always the async ingest path (no
+// incidentId — a vendor payload never targets an existing incident), so
+// this reuses ingestAlert()'s "no incidentId" branch unmodified; `token`
+// is passed empty since that branch never reaches the JWT-forwarding
+// incident-existence check the attach path needs.
+export async function ingestAlertSystemRoute(req: Request, res: Response) {
+  const result = ingestAlertSystemSchema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json({ error: z.flattenError(result.error) });
+    return;
+  }
+
+  const { alert, mode } = await ingestAlert(req.db, req.auth!.tenantId, "", result.data, req.auth!.userId);
+
+  if (mode === "deduped") {
+    res.status(200).json({ alert, deduped: true });
+    return;
+  }
+
+  res.status(202).json({ alert, deduped: false });
 }
 
 export async function listAlertsRoute(req: Request, res: Response) {

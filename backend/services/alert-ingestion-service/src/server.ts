@@ -4,12 +4,15 @@ import cors from "cors";
 import express from "express";
 import { Request, Response } from "express";
 import { authenticate } from "./middlewares/authenticate";
+import { requireServiceToken } from "./middlewares/requireServiceToken";
 import { tenantContext } from "./middlewares/tenantContext";
 import { errorHandler } from "./middlewares/errorHandler";
 import { notFound } from "./middlewares/notFound";
+import * as ingestionController from "./controllers/ingestion.controller";
 import { ingestionRouter } from "./routes/ingestion.routes";
 import { startOutboxPublisher } from "./services/outboxPublisher.service";
 import { connectConsumer } from "./events/consumer";
+import { asyncHandler } from "./utils";
 
 const app = express();
 const PORT = env.PORT;
@@ -24,6 +27,18 @@ app.use(express.json());
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
+
+// Registered BEFORE the authenticate-gated router below, and matched first
+// by Express for this exact path+method — the one route called
+// machine-to-machine (normalization-service, no user JWT to send since a
+// vendor SIEM/EDR webhook carries no ResponderX identity), gated by a
+// shared service token instead. See requireServiceToken.ts.
+app.post(
+  "/api/v1/alerts/system",
+  requireServiceToken,
+  tenantContext,
+  asyncHandler(ingestionController.ingestAlertSystemRoute),
+);
 
 app.use("/api/v1/alerts", authenticate, tenantContext, ingestionRouter);
 

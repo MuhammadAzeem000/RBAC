@@ -338,6 +338,10 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
       IDENTITY_SERVICE_URL: http://identity-service:4000
       INCIDENT_SERVICE_URL: http://incident-service:4200
+      # Phase 5.3: guards the machine-to-machine POST .../alerts/system
+      # route normalization-service calls — see
+      # src/middlewares/requireServiceToken.ts.
+      ALERT_INGESTION_SERVICE_TOKEN: ${ALERT_INGESTION_SERVICE_TOKEN:?ALERT_INGESTION_SERVICE_TOKEN is required, copy .env.example to .env and set it}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
       RABBITMQ_URL: amqp://rabbitmq:5672
     ports:
@@ -349,13 +353,55 @@ services:
       retries: 10
       start_period: 10s
 
+  # Phase 5.3's decomposition slice 3 — accepts vendor-shaped SIEM/EDR
+  # webhook payloads (Splunk/Sentinel/CrowdStrike/generic — see
+  # src/parsers/) and maps them into the canonical Alert/Entity shape,
+  # handing off to alert-ingestion-service's own machine-to-machine route.
+  normalization-service:
+    build:
+      context: .
+      dockerfile: backend/services/normalization-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      alert-ingestion-service:
+        condition: service_healthy
+    environment:
+      PORT: 4700
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: normalization_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500
+      ALERT_INGESTION_SERVICE_TOKEN: ${ALERT_INGESTION_SERVICE_TOKEN:?ALERT_INGESTION_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4700:4700"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   # Reverse proxy: the single origin the frontend talks to. Routes
   # "/api/v1/alerts*" (alert-ingestion-service), "/api/v1/playbook-catalog*"
-  # /"/api/v1/playbook-runs*"/"/api/v1/approvals*" (playbook-service) and the
-  # rest of "/api/v1/*" (incident-service's documented REST surface),
-  # "/api/audit-logs*" (audit-service, the single authoritative audit-log
-  # store), and "/api/connectors*" (integration-service) to their respective
-  # services, and everything else under "/api" to identity-service.
+  # /"/api/v1/playbook-runs*"/"/api/v1/approvals*" (playbook-service),
+  # "/api/v1/webhook-sources*"/"/api/v1/normalize*" (normalization-service)
+  # and the rest of "/api/v1/*" (incident-service's documented REST
+  # surface), "/api/audit-logs*" (audit-service, the single authoritative
+  # audit-log store), and "/api/connectors*" (integration-service) to their
+  # respective services, and everything else under "/api" to identity-service.
   api-gateway:
     build:
       context: .
@@ -374,6 +420,8 @@ services:
         condition: service_healthy
       alert-ingestion-service:
         condition: service_healthy
+      normalization-service:
+        condition: service_healthy
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
@@ -382,6 +430,7 @@ services:
       AUDIT_SERVICE_URL: http://audit-service:4400
       INTEGRATION_SERVICE_URL: http://integration-service:4300
       ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500
+      NORMALIZATION_SERVICE_URL: http://normalization-service:4700
     ports:
       - "8090:8000"
 

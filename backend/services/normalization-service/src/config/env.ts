@@ -7,7 +7,7 @@ dotenv.config({
 });
 
 const envSchema = z.object({
-  PORT: z.coerce.number().default(4500),
+  PORT: z.coerce.number().default(4700),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   DB_HOST: z.string().min(1),
   DB_PORT: z.coerce.number().int().positive(),
@@ -15,18 +15,14 @@ const envSchema = z.object({
   DB_PASSWORD: z.string().min(1),
   DB_NAME: z.string().min(1),
   // Must match identity-service's JWT_ACCESS_SECRET — this service verifies
-  // access tokens identity-service issued, it never issues its own.
+  // access tokens identity-service issued, it never issues its own. Only
+  // used by the human-facing webhook-source management routes; the inbound
+  // POST /api/v1/normalize/:vendor/:token receiver has no JWT to check.
   JWT_ACCESS_SECRET: z.string().min(32),
   IDENTITY_SERVICE_URL: z.string().url().default("http://localhost:4000"),
-  // The attach path (POST /alerts with an incidentId) verifies the incident
-  // actually exists before attaching — a synchronous cross-service READ,
-  // forwarding the caller's own bearer token (no saga, no service-token
-  // needed, unlike the async ingest path's incident-creation handoff).
-  INCIDENT_SERVICE_URL: z.string().url().default("http://localhost:4200"),
-  // Guards POST /api/v1/alerts/system — the one route called
-  // machine-to-machine, from normalization-service once it's parsed a
-  // vendor SIEM/EDR webhook into the canonical shape (a vendor payload has
-  // no ResponderX JWT to send). See middlewares/requireServiceToken.ts.
+  // Where a successfully parsed alert gets handed off — the machine-to-machine
+  // route added to alert-ingestion-service for this slice.
+  ALERT_INGESTION_SERVICE_URL: z.string().url().default("http://localhost:4500"),
   ALERT_INGESTION_SERVICE_TOKEN: z.string().min(16),
   CORS_ORIGIN: z.string().default("http://localhost:5173,http://localhost:5174"),
   RABBITMQ_URL: z.string().min(1).default("amqp://localhost:5672"),

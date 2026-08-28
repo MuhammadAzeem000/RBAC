@@ -15,3 +15,13 @@ export const ingestAlertRequestSchema = ingestAlertSchema.extend({
 });
 
 export type IngestAlertRequest = z.infer<typeof ingestAlertRequestSchema>;
+
+// System-triggered variant (POST /api/v1/alerts/system) — normalization-service
+// calling in with a tenantId resolved from a webhook token, no incidentId
+// (a vendor payload never targets an existing incident) and no
+// triggerPlaybookKey (not a feature of this entry path).
+export const ingestAlertSystemSchema = ingestAlertSchema.extend({
+  tenantId: z.string().regex(/^\d+$/, "tenantId must be a numeric id"),
+});
+
+export type IngestAlertSystemRequest = z.infer<typeof ingestAlertSystemSchema>;

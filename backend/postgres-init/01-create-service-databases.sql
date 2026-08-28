@@ -23,3 +23,6 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'alert_ingestion_db')\
 
 SELECT 'CREATE DATABASE playbook_db'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'playbook_db')\gexec
+
+SELECT 'CREATE DATABASE normalization_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'normalization_db')\gexec
