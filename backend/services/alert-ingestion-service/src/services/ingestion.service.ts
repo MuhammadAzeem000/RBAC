@@ -3,7 +3,8 @@ import { env } from "../config/env";
 import { prisma } from "../config/prisma";
 import { Prisma } from "../generated/prisma/client";
 import { HttpError } from "../middlewares/errorHandler";
-import { IngestAlertRequest } from "../interfaces/ingestion";
+import { IngestAlertRequest, ListAlertsQuery } from "../interfaces/ingestion";
+import { buildPaginationMeta, PaginatedResult, toSkipTake } from "../interfaces/pagination";
 import { writeOutboxEvent } from "./outbox.service";
 
 const TENANT_SCOPED_MODELS = ["Alert", "Entity", "OutboxEvent"] as const;
@@ -202,6 +203,33 @@ export function getAlertById(db: Prisma.TransactionClient, id: bigint): Promise<
 // incident-service no longer holds any Alert rows to list itself.
 export function listAlertsByIncident(db: Prisma.TransactionClient, incidentId: bigint): Promise<AlertResponse[]> {
   return db.alert.findMany({ where: { incidentId }, select: alertSelect, orderBy: { attachedAt: "desc" } });
+}
+
+// The tenant-wide alert inbox (GET /api/v1/alerts with no incidentId) — the
+// standalone Alerts page's own list, distinct from the per-incident one
+// above (which stays unpaginated, matching AlertsPanel's existing contract).
+export async function listAlerts(
+  db: Prisma.TransactionClient,
+  query: ListAlertsQuery,
+): Promise<PaginatedResult<AlertResponse>> {
+  const where: Prisma.AlertWhereInput = {
+    ...(query.status && { status: query.status }),
+    ...(query.search && {
+      OR: [
+        { externalAlertId: { contains: query.search, mode: "insensitive" } },
+        { source: { contains: query.search, mode: "insensitive" } },
+        { summary: { contains: query.search, mode: "insensitive" } },
+      ],
+    }),
+  };
+  const { skip, take } = toSkipTake(query.page, query.pageSize);
+
+  const [data, total] = await Promise.all([
+    db.alert.findMany({ where, select: alertSelect, orderBy: { attachedAt: "desc" }, skip, take }),
+    db.alert.count({ where }),
+  ]);
+
+  return { data, pagination: buildPaginationMeta(total, query.page, query.pageSize) };
 }
 
 // Called by events/consumer.ts on INCIDENT_CREATED_FOR_ALERT — builds its

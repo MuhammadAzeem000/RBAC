@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { HttpError } from "../middlewares/errorHandler";
-import { ingestAlertRequestSchema, ingestAlertSystemSchema } from "../interfaces/ingestion";
-import { getAlertById, ingestAlert, listAlertsByIncident } from "../services/ingestion.service";
-import { parseBigIntId } from "../utils";
+import { ingestAlertRequestSchema, ingestAlertSystemSchema, listAlertsQuerySchema } from "../interfaces/ingestion";
+import { getAlertById, ingestAlert, listAlerts, listAlertsByIncident } from "../services/ingestion.service";
+import { parseBigIntId, parseQuery } from "../utils";
 
 export async function ingestAlertRoute(req: Request, res: Response) {
   const result = ingestAlertRequestSchema.safeParse(req.body);
@@ -50,14 +50,25 @@ export async function ingestAlertSystemRoute(req: Request, res: Response) {
   res.status(202).json({ alert, deduped: false });
 }
 
+// Two modes, matched by whether ?incidentId is present: the per-incident
+// list (AlertsPanel's existing, unpaginated contract) or the tenant-wide
+// alert inbox (the standalone Alerts page, paginated).
 export async function listAlertsRoute(req: Request, res: Response) {
-  const incidentId = parseBigIntId(req.query.incidentId);
-  if (incidentId === null) {
-    throw new HttpError(400, "Query param 'incidentId' is required and must be numeric");
+  if (req.query.incidentId !== undefined) {
+    const incidentId = parseBigIntId(req.query.incidentId);
+    if (incidentId === null) {
+      throw new HttpError(400, "Query param 'incidentId' must be numeric");
+    }
+    const alerts = await listAlertsByIncident(req.db, incidentId);
+    res.json({ data: alerts });
+    return;
   }
 
-  const alerts = await listAlertsByIncident(req.db, incidentId);
-  res.json({ data: alerts });
+  const query = parseQuery(listAlertsQuerySchema, req, res);
+  if (!query) return;
+
+  const result = await listAlerts(req.db, query);
+  res.json(result);
 }
 
 export async function getAlertRoute(req: Request, res: Response) {

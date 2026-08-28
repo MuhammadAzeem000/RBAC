@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ingestAlertSchema } from "@responderx/shared";
+import { paginationQuerySchema } from "./pagination";
 
 // The canonical shape (source, externalId, severity, timestamp, entities[],
 // rawRef) comes straight from @responderx/shared. incidentId is the one
@@ -25,3 +26,14 @@ export const ingestAlertSystemSchema = ingestAlertSchema.extend({
 });
 
 export type IngestAlertSystemRequest = z.infer<typeof ingestAlertSystemSchema>;
+
+// GET /api/v1/alerts with no incidentId — a tenant-wide, paginated alert
+// inbox (the per-incident list, GET /api/v1/alerts?incidentId=X, stays
+// unpaginated and unchanged — see controllers/ingestion.controller.ts's
+// branch on whether incidentId is present).
+export const listAlertsQuerySchema = paginationQuerySchema.extend({
+  status: z.enum(["pending_case", "linked", "attached", "failed"]).optional(),
+  search: z.string().trim().min(1).max(255).optional(),
+});
+
+export type ListAlertsQuery = z.infer<typeof listAlertsQuerySchema>;

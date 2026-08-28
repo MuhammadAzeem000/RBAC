@@ -17,3 +17,12 @@ export function parseBigIntId(value: unknown): bigint | null {
     return null;
   }
 }
+
+export function parseQuery<T>(schema: ZodType<T>, req: Request, res: Response): T | null {
+  const result = schema.safeParse(req.query);
+  if (!result.success) {
+    res.status(400).json({ error: z.flattenError(result.error) });
+    return null;
+  }
+  return result.data;
+}

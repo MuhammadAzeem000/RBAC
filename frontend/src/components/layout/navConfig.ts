@@ -1,9 +1,11 @@
 import type { LucideIcon } from 'lucide-react'
 import {
+  Bell,
   KeyRound,
   LayoutDashboard,
   LayoutGrid,
   Network,
+  Plug,
   ScrollText,
   ShieldAlert,
   ShieldCheck,
@@ -21,6 +23,10 @@ export interface NavItem {
 // Dashboard is always shown — it isn't backed by a module permission.
 const MODULE_GATED_ITEMS: { moduleName: string; item: NavItem }[] = [
   { moduleName: 'Incidents', item: { to: '/incidents', label: 'Incidents', icon: ShieldAlert } },
+  // Gated on the same "Incidents" module as incidents — alert-ingestion-service's
+  // own routes reuse that module's Create/View actions rather than a new one.
+  { moduleName: 'Incidents', item: { to: '/alerts', label: 'Alerts', icon: Bell } },
+  { moduleName: 'Connectors', item: { to: '/connectors', label: 'Connectors', icon: Plug } },
   { moduleName: 'Users', item: { to: '/users', label: 'Users', icon: Users } },
   { moduleName: 'Departments', item: { to: '/departments', label: 'Departments', icon: Network } },
   { moduleName: 'Roles', item: { to: '/roles', label: 'Roles', icon: ShieldCheck } },

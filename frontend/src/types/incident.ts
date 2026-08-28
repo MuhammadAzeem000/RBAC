@@ -111,6 +111,19 @@ export interface AttachAlertInput {
   incidentId: string
 }
 
+// The same shape with incidentId omitted — the async ingest-and-create-a-case
+// saga (see the standalone Alerts page's "Ingest test alert" action), which
+// resolves to 'pending_case' immediately and 'linked' once incident-service's
+// reply arrives.
+export type IngestTestAlertInput = Omit<AttachAlertInput, 'incidentId'>
+
+export interface AlertListQuery {
+  page?: number
+  pageSize?: number
+  status?: AlertStatus
+  search?: string
+}
+
 export type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
 
 export interface IncidentTask {
