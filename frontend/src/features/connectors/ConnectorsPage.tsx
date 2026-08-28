@@ -60,6 +60,44 @@ const CREDENTIAL_FIELDS: Record<string, CredentialFieldConfig[]> = {
     { field: 'user', label: 'Username', type: 'text', hint: 'Leave blank for an unauthenticated relay.' },
     { field: 'pass', label: 'Password', type: 'password' },
   ],
+  qradar: [
+    {
+      field: 'host',
+      label: 'Console URL',
+      type: 'text',
+      placeholder: 'https://qradar.example.com',
+      hint: 'Your own QRadar console — every deployment is customer-hosted, no shared endpoint.',
+      required: true,
+    },
+    { field: 'token', label: 'Authorized service token', type: 'password', required: true },
+  ],
+  fortigate: [
+    {
+      field: 'host',
+      label: 'Appliance URL',
+      type: 'text',
+      placeholder: 'https://fortigate.example.com',
+      hint: 'Your own FortiGate appliance — no shared endpoint.',
+      required: true,
+    },
+    { field: 'apiToken', label: 'API token', type: 'password', required: true },
+  ],
+  crowdstrike: [
+    { field: 'clientId', label: 'API client ID', type: 'text', required: true },
+    { field: 'clientSecret', label: 'API client secret', type: 'password', required: true },
+    {
+      field: 'cloudUrl',
+      label: 'Cloud URL',
+      type: 'text',
+      placeholder: 'https://api.crowdstrike.com',
+      hint: 'Leave blank for the default us-1 cloud — set this for eu-1/us-2/us-gov-1.',
+    },
+  ],
+  defender: [
+    { field: 'tenantId', label: 'Azure AD tenant ID', type: 'text', required: true },
+    { field: 'clientId', label: 'App registration client ID', type: 'text', required: true },
+    { field: 'clientSecret', label: 'Client secret', type: 'password', required: true },
+  ],
 }
 
 type CredentialFormValues = Record<string, string | boolean>
