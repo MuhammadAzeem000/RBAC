@@ -3,6 +3,7 @@ import { env } from "./config/env";
 import cors from "cors";
 import express from "express";
 import { Request, Response } from "express";
+import swaggerUi from "swagger-ui-express";
 import { authenticate } from "./middlewares/authenticate";
 import { requireServiceToken } from "./middlewares/requireServiceToken";
 import { tenantContext } from "./middlewares/tenantContext";
@@ -11,6 +12,7 @@ import { errorHandler } from "./middlewares/errorHandler";
 import * as timelineController from "./controllers/timeline.controller";
 import { incidentRouter } from "./routes/incident.routes";
 import { notFound } from "./middlewares/notFound";
+import { isSwaggerEnabled, swaggerSpec, swaggerUiOptions } from "./config/swagger";
 import { startOutboxPublisher } from "./services/outboxPublisher.service";
 import { connectAlertConsumer } from "./events/alertConsumer";
 import { asyncHandler } from "./utils";
@@ -29,6 +31,13 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
 
+// Dev-only interactive API docs — see config/swagger.ts. Never mounted in
+// production.
+if (isSwaggerEnabled) {
+  app.get("/api-docs.json", (_req: Request, res: Response) => res.json(swaggerSpec));
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+}
+
 // Registered BEFORE the authenticate-gated router below, and matched first
 // by Express for this exact path+method — the one route called
 // machine-to-machine (playbook-service's Temporal Activities, no user JWT
@@ -36,6 +45,44 @@ app.get("/health", (_req: Request, res: Response) => {
 // requireServiceToken.ts. Phase 5.2: TimelineEvent stays owned by this
 // service even though the Playbook/Orchestration/Approval subsystem that
 // writes most entries to it moved out.
+/**
+ * @openapi
+ * /incidents/{id}/timeline:
+ *   post:
+ *     summary: Record a timeline event (machine-to-machine)
+ *     description: >
+ *       Called by playbook-service's Temporal Activities to append a timeline entry for a playbook/approval state
+ *       change, since TimelineEvent stays owned by incident-service. Not reachable with a user JWT.
+ *     tags: [Timeline]
+ *     security: [{ serviceToken: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [tenantId, eventType, summary]
+ *             properties:
+ *               tenantId: { type: string, description: Numeric tenant id as a string. }
+ *               eventType: { type: string, example: playbook_step_completed }
+ *               actorUserId: { type: string, description: Numeric user id as a string. }
+ *               summary: { type: string }
+ *               metadata: { type: object }
+ *     responses:
+ *       201:
+ *         description: The recorded timeline entry.
+ *       400:
+ *         description: Invalid incident id or validation error.
+ *       401:
+ *         description: Missing or invalid X-Service-Token.
+ *       404:
+ *         description: Incident not found.
+ */
 app.post(
   "/api/v1/incidents/:id/timeline",
   requireServiceToken,

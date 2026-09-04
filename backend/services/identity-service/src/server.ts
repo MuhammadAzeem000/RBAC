@@ -3,6 +3,8 @@ import { env } from "./config/env";
 import cors from "cors";
 import express from "express";
 import { Request, Response } from "express";
+import swaggerUi from "swagger-ui-express";
+import { isSwaggerEnabled, swaggerSpec, swaggerUiOptions } from "./config/swagger";
 import { actionRouter } from "./routes/action.routes";
 import { authRouter } from "./routes/auth.routes";
 import { departmentRouter } from "./routes/department.routes";
@@ -33,6 +35,13 @@ app.use(express.json());
 app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok" });
 });
+
+// Dev-only interactive API docs — see config/swagger.ts. Never mounted in
+// production.
+if (isSwaggerEnabled) {
+  app.get("/api-docs.json", (_req: Request, res: Response) => res.json(swaggerSpec));
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+}
 
 // Public: login/register/refresh are how a session gets created in the first place.
 app.use("/api/auth", authRouter);

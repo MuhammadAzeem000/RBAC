@@ -3,12 +3,14 @@ import { env } from "./config/env";
 import cors from "cors";
 import express from "express";
 import { Request, Response } from "express";
+import swaggerUi from "swagger-ui-express";
 import { authenticate } from "./middlewares/authenticate";
 import { tenantContext } from "./middlewares/tenantContext";
 import { errorHandler } from "./middlewares/errorHandler";
 import { notFound } from "./middlewares/notFound";
 import { webhookSourceRouter } from "./routes/webhookSource.routes";
 import { normalizeRouter } from "./routes/normalize.routes";
+import { isSwaggerEnabled, swaggerSpec, swaggerUiOptions } from "./config/swagger";
 import { startOutboxPublisher } from "./services/outboxPublisher.service";
 
 const app = express();
@@ -24,6 +26,13 @@ app.use(express.json());
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
+
+// Dev-only interactive API docs — see config/swagger.ts. Never mounted in
+// production.
+if (isSwaggerEnabled) {
+  app.get("/api-docs.json", (_req: Request, res: Response) => res.json(swaggerSpec));
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+}
 
 // Public — a vendor SIEM/EDR sends its own webhook auth (or none), never a
 // ResponderX JWT. See routes/normalize.routes.ts.
