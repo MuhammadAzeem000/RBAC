@@ -28,6 +28,7 @@ const resolvedVersion = {
   requiresApproval: false,
   startPolicyKey: null,
   steps: [],
+  edges: [],
 };
 
 describe("playbookRun.service startPlaybookRun", () => {

@@ -56,6 +56,11 @@ export async function listConnectors(req: Request, res: Response) {
       type: row!.type,
       status: row!.status,
       credentialConfigured: row!.credential !== null,
+      // Additive field for the Playbook Designer's step editor (a step
+      // binds to one of these by name) — "test" is deliberately excluded,
+      // it's a connection-validation action, not something a playbook step
+      // would ever call.
+      actionKeys: Object.keys(getConnectorDefinition(row!.key)?.actions ?? {}).filter((a) => a !== "test"),
     })),
   });
 }

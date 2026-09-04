@@ -55,6 +55,24 @@ app.use(
     pathRewrite: { "^/": "/api/v1/approvals/" },
   }),
 );
+// Playbook Designer's authoring API — same service, same ordering
+// requirement (must precede the general "/api/v1" catch-all below).
+app.use(
+  "/api/v1/playbooks",
+  createProxyMiddleware({
+    target: env.PLAYBOOK_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/playbooks/" },
+  }),
+);
+app.use(
+  "/api/v1/policies",
+  createProxyMiddleware({
+    target: env.PLAYBOOK_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/policies/" },
+  }),
+);
 
 // Normalization moved into its own service (Phase 5.3's decomposition
 // slice 3) — same prefix-ordering requirement as the carve-outs above.
@@ -120,6 +138,8 @@ app.listen(env.PORT, () => {
   console.log(`  /api/v1/playbook-catalog/* -> ${env.PLAYBOOK_SERVICE_URL}`);
   console.log(`  /api/v1/playbook-runs/*    -> ${env.PLAYBOOK_SERVICE_URL}`);
   console.log(`  /api/v1/approvals/*        -> ${env.PLAYBOOK_SERVICE_URL}`);
+  console.log(`  /api/v1/playbooks/*        -> ${env.PLAYBOOK_SERVICE_URL}`);
+  console.log(`  /api/v1/policies/*         -> ${env.PLAYBOOK_SERVICE_URL}`);
   console.log(`  /api/v1/webhook-sources/*  -> ${env.NORMALIZATION_SERVICE_URL}`);
   console.log(`  /api/v1/normalize/*        -> ${env.NORMALIZATION_SERVICE_URL}`);
   console.log(`  /api/v1/*                  -> ${env.INCIDENT_SERVICE_URL}`);

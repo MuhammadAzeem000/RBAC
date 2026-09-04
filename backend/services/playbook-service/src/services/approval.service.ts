@@ -90,7 +90,7 @@ export async function decideApproval(
     throw new HttpError(409, "This approval predates durable orchestration and can no longer be decided");
   }
 
-  await signalDecision(run.temporalWorkflowId, decision, approverUserId);
+  await signalDecision(run.temporalWorkflowId, approvalId, decision, approverUserId);
 
   await new Promise((resolve) => setTimeout(resolve, 250));
   const refreshed = await db.approval.findFirst({ where: { id: approvalId }, select: approvalSelect });

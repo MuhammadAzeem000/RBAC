@@ -1,5 +1,5 @@
 import { defineSignal } from "@temporalio/workflow";
-import type { PlaybookStep } from "@responderx/shared";
+import type { PlaybookEdge, PlaybookStep } from "@responderx/shared";
 
 // Shared between workflows.ts (the workflow implementation — loaded ONLY by
 // Temporal's sandboxed worker bundler via a file path, never a normal Node
@@ -20,19 +20,29 @@ export interface PlaybookRunWorkflowInput {
   // @responderx/shared) for a mid-run gate instead of/in addition to this.
   startPolicyKey: string | null;
   steps: PlaybookStep[];
+  // Empty means "no explicit graph" — workflows.ts's graph.ts synthesizes an
+  // implicit linear chain over `steps` in that case (see @responderx/shared's
+  // playbookVersionSchema comment).
+  edges: PlaybookEdge[];
 }
 
 export interface DecisionSignalInput {
   decision: "approved" | "rejected";
   approverId: string;
+  // Identifies which approval gate this decision is for. Branching means
+  // multiple gates (e.g. one per parallel branch's policyKey step) can be
+  // open concurrently within the same run — workflows.ts's playbookRunWorkflow
+  // dispatches incoming signals to the matching gate by this id rather than
+  // assuming there's only ever one gate open, the way it could when steps
+  // ran strictly sequentially.
+  approvalId: string;
 }
 
 // Generalizes the old approve-only signal to a real decision — a human can
-// now explicitly reject, not just approve-or-silently-time-out. Reused
-// across every approval gate in one run (playbook-start and any per-step
-// gates); since steps execute sequentially, only one gate is ever open at a
-// time, so a single signal channel is enough — see workflows.ts's
-// awaitApproval().
+// now explicitly reject, not just approve-or-silently-time-out. One shared
+// channel for every approval gate across the whole run; workflows.ts routes
+// each incoming signal to the correct concurrently-open gate via
+// DecisionSignalInput.approvalId (see its playbookRunWorkflow/awaitApproval).
 export const decisionSignal = defineSignal<[DecisionSignalInput]>("decision");
 
 export const PLAYBOOK_TASK_QUEUE = "soar-playbooks";

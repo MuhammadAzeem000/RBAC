@@ -22,6 +22,7 @@ export const MODULE_NAMES = {
   TENANTS: "Tenants",
   CONNECTORS: "Connectors",
   APPROVALS: "Approvals",
+  PLAYBOOKS: "Playbooks",
 } as const;
 
 export const ACTION_NAMES = {

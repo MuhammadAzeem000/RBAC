@@ -6,6 +6,10 @@ export interface Connector {
   type: string
   status: ConnectorStatus
   credentialConfigured: boolean
+  // The connector's playbook-callable actions ("test" excluded) — used by
+  // the Playbook Designer's step editor to populate a dependent action
+  // dropdown once a connector is chosen.
+  actionKeys: string[]
 }
 
 export interface TestConnectorResult {

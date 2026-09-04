@@ -1000,6 +1000,7 @@ export const PlaybookVersionScalarFieldEnum = {
   requiresApproval: 'requiresApproval',
   startPolicyKey: 'startPolicyKey',
   steps: 'steps',
+  edges: 'edges',
   createdAt: 'createdAt'
 } as const
 

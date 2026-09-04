@@ -66,6 +66,7 @@ export type PlaybookVersionCountAggregateOutputType = {
   requiresApproval: number
   startPolicyKey: number
   steps: number
+  edges: number
   createdAt: number
   _all: number
 }
@@ -111,6 +112,7 @@ export type PlaybookVersionCountAggregateInputType = {
   requiresApproval?: true
   startPolicyKey?: true
   steps?: true
+  edges?: true
   createdAt?: true
   _all?: true
 }
@@ -209,6 +211,7 @@ export type PlaybookVersionGroupByOutputType = {
   requiresApproval: boolean
   startPolicyKey: string | null
   steps: runtime.JsonValue
+  edges: runtime.JsonValue
   createdAt: Date
   _count: PlaybookVersionCountAggregateOutputType | null
   _avg: PlaybookVersionAvgAggregateOutputType | null
@@ -243,6 +246,7 @@ export type PlaybookVersionWhereInput = {
   requiresApproval?: Prisma.BoolFilter<"PlaybookVersion"> | boolean
   startPolicyKey?: Prisma.StringNullableFilter<"PlaybookVersion"> | string | null
   steps?: Prisma.JsonFilter<"PlaybookVersion">
+  edges?: Prisma.JsonFilter<"PlaybookVersion">
   createdAt?: Prisma.DateTimeFilter<"PlaybookVersion"> | Date | string
   playbook?: Prisma.XOR<Prisma.PlaybookScalarRelationFilter, Prisma.PlaybookWhereInput>
   playbookRuns?: Prisma.PlaybookRunListRelationFilter
@@ -256,6 +260,7 @@ export type PlaybookVersionOrderByWithRelationInput = {
   requiresApproval?: Prisma.SortOrder
   startPolicyKey?: Prisma.SortOrderInput | Prisma.SortOrder
   steps?: Prisma.SortOrder
+  edges?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   playbook?: Prisma.PlaybookOrderByWithRelationInput
   playbookRuns?: Prisma.PlaybookRunOrderByRelationAggregateInput
@@ -273,6 +278,7 @@ export type PlaybookVersionWhereUniqueInput = Prisma.AtLeast<{
   requiresApproval?: Prisma.BoolFilter<"PlaybookVersion"> | boolean
   startPolicyKey?: Prisma.StringNullableFilter<"PlaybookVersion"> | string | null
   steps?: Prisma.JsonFilter<"PlaybookVersion">
+  edges?: Prisma.JsonFilter<"PlaybookVersion">
   createdAt?: Prisma.DateTimeFilter<"PlaybookVersion"> | Date | string
   playbook?: Prisma.XOR<Prisma.PlaybookScalarRelationFilter, Prisma.PlaybookWhereInput>
   playbookRuns?: Prisma.PlaybookRunListRelationFilter
@@ -286,6 +292,7 @@ export type PlaybookVersionOrderByWithAggregationInput = {
   requiresApproval?: Prisma.SortOrder
   startPolicyKey?: Prisma.SortOrderInput | Prisma.SortOrder
   steps?: Prisma.SortOrder
+  edges?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.PlaybookVersionCountOrderByAggregateInput
   _avg?: Prisma.PlaybookVersionAvgOrderByAggregateInput
@@ -305,6 +312,7 @@ export type PlaybookVersionScalarWhereWithAggregatesInput = {
   requiresApproval?: Prisma.BoolWithAggregatesFilter<"PlaybookVersion"> | boolean
   startPolicyKey?: Prisma.StringNullableWithAggregatesFilter<"PlaybookVersion"> | string | null
   steps?: Prisma.JsonWithAggregatesFilter<"PlaybookVersion">
+  edges?: Prisma.JsonWithAggregatesFilter<"PlaybookVersion">
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"PlaybookVersion"> | Date | string
 }
 
@@ -315,6 +323,7 @@ export type PlaybookVersionCreateInput = {
   requiresApproval?: boolean
   startPolicyKey?: string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   playbook: Prisma.PlaybookCreateNestedOneWithoutVersionsInput
   playbookRuns?: Prisma.PlaybookRunCreateNestedManyWithoutVersionInput
@@ -328,6 +337,7 @@ export type PlaybookVersionUncheckedCreateInput = {
   requiresApproval?: boolean
   startPolicyKey?: string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   playbookRuns?: Prisma.PlaybookRunUncheckedCreateNestedManyWithoutVersionInput
 }
@@ -339,6 +349,7 @@ export type PlaybookVersionUpdateInput = {
   requiresApproval?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startPolicyKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   playbook?: Prisma.PlaybookUpdateOneRequiredWithoutVersionsNestedInput
   playbookRuns?: Prisma.PlaybookRunUpdateManyWithoutVersionNestedInput
@@ -352,6 +363,7 @@ export type PlaybookVersionUncheckedUpdateInput = {
   requiresApproval?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startPolicyKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   playbookRuns?: Prisma.PlaybookRunUncheckedUpdateManyWithoutVersionNestedInput
 }
@@ -364,6 +376,7 @@ export type PlaybookVersionCreateManyInput = {
   requiresApproval?: boolean
   startPolicyKey?: string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
 }
 
@@ -374,6 +387,7 @@ export type PlaybookVersionUpdateManyMutationInput = {
   requiresApproval?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startPolicyKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -385,6 +399,7 @@ export type PlaybookVersionUncheckedUpdateManyInput = {
   requiresApproval?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startPolicyKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -411,6 +426,7 @@ export type PlaybookVersionCountOrderByAggregateInput = {
   requiresApproval?: Prisma.SortOrder
   startPolicyKey?: Prisma.SortOrder
   steps?: Prisma.SortOrder
+  edges?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -518,6 +534,7 @@ export type PlaybookVersionCreateWithoutPlaybookInput = {
   requiresApproval?: boolean
   startPolicyKey?: string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   playbookRuns?: Prisma.PlaybookRunCreateNestedManyWithoutVersionInput
 }
@@ -529,6 +546,7 @@ export type PlaybookVersionUncheckedCreateWithoutPlaybookInput = {
   requiresApproval?: boolean
   startPolicyKey?: string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   playbookRuns?: Prisma.PlaybookRunUncheckedCreateNestedManyWithoutVersionInput
 }
@@ -570,6 +588,7 @@ export type PlaybookVersionScalarWhereInput = {
   requiresApproval?: Prisma.BoolFilter<"PlaybookVersion"> | boolean
   startPolicyKey?: Prisma.StringNullableFilter<"PlaybookVersion"> | string | null
   steps?: Prisma.JsonFilter<"PlaybookVersion">
+  edges?: Prisma.JsonFilter<"PlaybookVersion">
   createdAt?: Prisma.DateTimeFilter<"PlaybookVersion"> | Date | string
 }
 
@@ -580,6 +599,7 @@ export type PlaybookVersionCreateWithoutPlaybookRunsInput = {
   requiresApproval?: boolean
   startPolicyKey?: string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
   playbook: Prisma.PlaybookCreateNestedOneWithoutVersionsInput
 }
@@ -592,6 +612,7 @@ export type PlaybookVersionUncheckedCreateWithoutPlaybookRunsInput = {
   requiresApproval?: boolean
   startPolicyKey?: string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
 }
 
@@ -618,6 +639,7 @@ export type PlaybookVersionUpdateWithoutPlaybookRunsInput = {
   requiresApproval?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startPolicyKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   playbook?: Prisma.PlaybookUpdateOneRequiredWithoutVersionsNestedInput
 }
@@ -630,6 +652,7 @@ export type PlaybookVersionUncheckedUpdateWithoutPlaybookRunsInput = {
   requiresApproval?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startPolicyKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -640,6 +663,7 @@ export type PlaybookVersionCreateManyPlaybookInput = {
   requiresApproval?: boolean
   startPolicyKey?: string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Date | string
 }
 
@@ -650,6 +674,7 @@ export type PlaybookVersionUpdateWithoutPlaybookInput = {
   requiresApproval?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startPolicyKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   playbookRuns?: Prisma.PlaybookRunUpdateManyWithoutVersionNestedInput
 }
@@ -661,6 +686,7 @@ export type PlaybookVersionUncheckedUpdateWithoutPlaybookInput = {
   requiresApproval?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startPolicyKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   playbookRuns?: Prisma.PlaybookRunUncheckedUpdateManyWithoutVersionNestedInput
 }
@@ -672,6 +698,7 @@ export type PlaybookVersionUncheckedUpdateManyWithoutPlaybookInput = {
   requiresApproval?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startPolicyKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   steps?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  edges?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -714,6 +741,7 @@ export type PlaybookVersionSelect<ExtArgs extends runtime.Types.Extensions.Inter
   requiresApproval?: boolean
   startPolicyKey?: boolean
   steps?: boolean
+  edges?: boolean
   createdAt?: boolean
   playbook?: boolean | Prisma.PlaybookDefaultArgs<ExtArgs>
   playbookRuns?: boolean | Prisma.PlaybookVersion$playbookRunsArgs<ExtArgs>
@@ -728,6 +756,7 @@ export type PlaybookVersionSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   requiresApproval?: boolean
   startPolicyKey?: boolean
   steps?: boolean
+  edges?: boolean
   createdAt?: boolean
   playbook?: boolean | Prisma.PlaybookDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["playbookVersion"]>
@@ -740,6 +769,7 @@ export type PlaybookVersionSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   requiresApproval?: boolean
   startPolicyKey?: boolean
   steps?: boolean
+  edges?: boolean
   createdAt?: boolean
   playbook?: boolean | Prisma.PlaybookDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["playbookVersion"]>
@@ -752,10 +782,11 @@ export type PlaybookVersionSelectScalar = {
   requiresApproval?: boolean
   startPolicyKey?: boolean
   steps?: boolean
+  edges?: boolean
   createdAt?: boolean
 }
 
-export type PlaybookVersionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "playbookId" | "version" | "requiresApproval" | "startPolicyKey" | "steps" | "createdAt", ExtArgs["result"]["playbookVersion"]>
+export type PlaybookVersionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "playbookId" | "version" | "requiresApproval" | "startPolicyKey" | "steps" | "edges" | "createdAt", ExtArgs["result"]["playbookVersion"]>
 export type PlaybookVersionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   playbook?: boolean | Prisma.PlaybookDefaultArgs<ExtArgs>
   playbookRuns?: boolean | Prisma.PlaybookVersion$playbookRunsArgs<ExtArgs>
@@ -782,6 +813,7 @@ export type $PlaybookVersionPayload<ExtArgs extends runtime.Types.Extensions.Int
     requiresApproval: boolean
     startPolicyKey: string | null
     steps: runtime.JsonValue
+    edges: runtime.JsonValue
     createdAt: Date
   }, ExtArgs["result"]["playbookVersion"]>
   composites: {}
@@ -1215,6 +1247,7 @@ export interface PlaybookVersionFieldRefs {
   readonly requiresApproval: Prisma.FieldRef<"PlaybookVersion", 'Boolean'>
   readonly startPolicyKey: Prisma.FieldRef<"PlaybookVersion", 'String'>
   readonly steps: Prisma.FieldRef<"PlaybookVersion", 'Json'>
+  readonly edges: Prisma.FieldRef<"PlaybookVersion", 'Json'>
   readonly createdAt: Prisma.FieldRef<"PlaybookVersion", 'DateTime'>
 }
     

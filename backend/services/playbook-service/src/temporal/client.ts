@@ -5,7 +5,7 @@
 // Only ./types (no such call) and string workflow-type names cross that
 // boundary here.
 import { Client, Connection, WorkflowIdReusePolicy } from "@temporalio/client";
-import type { PlaybookStep } from "@responderx/shared";
+import type { PlaybookEdge, PlaybookStep } from "@responderx/shared";
 import { env } from "../config/env";
 import { PLAYBOOK_TASK_QUEUE, PLAYBOOK_WORKFLOW_TYPE, PlaybookRunWorkflowInput, decisionSignal } from "./types";
 
@@ -32,6 +32,7 @@ export interface StartPlaybookRunWorkflowInput {
   playbookName: string;
   startPolicyKey: string | null;
   steps: PlaybookStep[];
+  edges: PlaybookEdge[];
 }
 
 export async function startPlaybookRunWorkflow(input: StartPlaybookRunWorkflowInput): Promise<string> {
@@ -45,6 +46,7 @@ export async function startPlaybookRunWorkflow(input: StartPlaybookRunWorkflowIn
     playbookName: input.playbookName,
     startPolicyKey: input.startPolicyKey,
     steps: input.steps,
+    edges: input.edges,
   };
 
   const handle = await client.workflow.start(PLAYBOOK_WORKFLOW_TYPE, {
@@ -58,15 +60,21 @@ export async function startPlaybookRunWorkflow(input: StartPlaybookRunWorkflowIn
 
 // Generalizes the old approve-only signalApproval to a real decision —
 // used by both approving and rejecting a pending Approval (see
-// approval.service.ts).
+// approval.service.ts). `approvalId` lets the workflow route this signal to
+// the correct gate when branches mean more than one can be open at once.
 export async function signalDecision(
   workflowId: string,
+  approvalId: bigint,
   decision: "approved" | "rejected",
   approverId: bigint,
 ): Promise<void> {
   const client = await getClient();
   const handle = client.workflow.getHandle(workflowId);
-  await handle.signal(decisionSignal, { decision, approverId: approverId.toString() });
+  await handle.signal(decisionSignal, {
+    decision,
+    approverId: approverId.toString(),
+    approvalId: approvalId.toString(),
+  });
 }
 
 export async function cancelPlaybookRunWorkflow(workflowId: string): Promise<void> {

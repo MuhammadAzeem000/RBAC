@@ -8,6 +8,8 @@ import { IncidentsListPage } from '@/features/incidents/IncidentsListPage'
 import { IncidentDetailPage } from '@/features/incidents/IncidentDetailPage'
 import { AlertsListPage } from '@/features/alerts/AlertsListPage'
 import { ConnectorsPage } from '@/features/connectors/ConnectorsPage'
+import { PlaybooksListPage } from '@/features/playbooks/PlaybooksListPage'
+import { PlaybookDesignerPage } from '@/features/playbooks/PlaybookDesignerPage'
 import { UsersListPage } from '@/features/users/UsersListPage'
 import { UserDetailPage } from '@/features/users/UserDetailPage'
 import { DepartmentsListPage } from '@/features/departments/DepartmentsListPage'
@@ -39,6 +41,10 @@ function App() {
           <Route path="alerts" element={<AlertsListPage />} />
 
           <Route path="connectors" element={<ConnectorsPage />} />
+
+          <Route path="playbooks" element={<PlaybooksListPage />} />
+          <Route path="playbooks/new" element={<PlaybookDesignerPage />} />
+          <Route path="playbooks/:key/edit" element={<PlaybookDesignerPage />} />
 
           <Route path="users" element={<UsersListPage />} />
           <Route path="users/:id" element={<UserDetailPage />} />

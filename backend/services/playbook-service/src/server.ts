@@ -11,6 +11,8 @@ import { notFound } from "./middlewares/notFound";
 import * as playbookRunController from "./controllers/playbookRun.controller";
 import { playbookCatalogRouter } from "./routes/playbookCatalog.routes";
 import { playbookRunRouter } from "./routes/playbookRun.routes";
+import { playbookRouter } from "./routes/playbook.routes";
+import { policyRouter } from "./routes/policy.routes";
 import { approvalRouter } from "./routes/approval.routes";
 import { startOutboxPublisher } from "./services/outboxPublisher.service";
 import { connectEventBus } from "./events/eventBus.service";
@@ -45,6 +47,8 @@ app.post(
 
 app.use("/api/v1/playbook-catalog", authenticate, tenantContext, playbookCatalogRouter);
 app.use("/api/v1/playbook-runs", authenticate, tenantContext, playbookRunRouter);
+app.use("/api/v1/playbooks", authenticate, tenantContext, playbookRouter);
+app.use("/api/v1/policies", authenticate, tenantContext, policyRouter);
 app.use("/api/v1/approvals", authenticate, tenantContext, approvalRouter);
 
 app.use(notFound);

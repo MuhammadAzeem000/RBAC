@@ -83,6 +83,7 @@ export async function startPlaybookRun(
     playbookName: resolved.playbookName,
     startPolicyKey: resolved.startPolicyKey,
     steps: resolved.steps,
+    edges: resolved.edges,
   });
 
   return db.playbookRun.update({

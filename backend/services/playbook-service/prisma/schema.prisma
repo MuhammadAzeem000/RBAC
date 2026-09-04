@@ -8,10 +8,9 @@ datasource db {
 }
 
 // Versioned playbook definitions, replacing the hardcoded PLAYBOOK_CATALOG
-// constant. `steps` stays an opaque JSON array — the real DAG/step model
-// (conditions, parallel branches, retries) would be a further evolution,
-// not attempted here; this only needs the catalog to be real, DB-backed,
-// and versioned.
+// constant. `steps`/`edges` stay opaque JSON — validated against
+// @responderx/shared's playbookStepSchema/playbookEdgeSchema at the
+// service layer (playbookCatalog.service.ts), not at the DB layer.
 model Playbook {
   id BigInt @id @default(autoincrement())
 
@@ -45,7 +44,12 @@ model PlaybookVersion {
   // null means no start gate. Individual steps can carry their own
   // policyKey too (inside `steps`' JSON) for a mid-run gate.
   startPolicyKey   String? @map("start_policy_key") @db.VarChar(100)
+  // Step nodes (each optionally carrying a canvas `position`).
   steps            Json    @default("[]") @db.Json
+  // Directed edges between step keys, optionally condition-guarded. Empty
+  // means "no explicit graph" — every consumer synthesizes an implicit
+  // linear chain over `steps` in that case (see shared playbook.ts).
+  edges            Json    @default("[]") @db.Json
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
