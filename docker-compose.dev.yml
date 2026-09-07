@@ -107,18 +107,28 @@ services:
 
   identity-service:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /repo/app
     # openssl is needed by Prisma's query engine on alpine; migrate deploy
     # applies any pending migrations before the dev server starts, same as
     # the production Dockerfile's CMD.
     command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
     volumes:
-      - ./backend/services/identity-service:/app
-      - identity_dev_node_modules:/app/node_modules
+      - ./backend/services/identity-service:/repo/app
+      - identity_dev_node_modules:/repo/app/node_modules
       # @responderx/shared is a "file:../../shared" dependency (see
-      # package.json) — that relative path is resolved from /app inside the
-      # container, so the shared package must be mounted at the matching
-      # depth (/app/../../shared normalizes to /shared on a container root).
+      # package.json), resolved from the service's own directory two levels
+      # up. npm's lockfile bakes in the literal ".." count, and its
+      # arborist crashes if the container's actual directory depth doesn't
+      # match that count exactly. /repo/app nested one level under /repo,
+      # with /shared still at the container ROOT, reproduces the same
+      # two-level relationship the lockfile expects (backend/services/<name>
+      # -> backend/shared on the host: /repo/app -> /repo -> / -> /shared).
+      # Do NOT flatten this to working_dir /app with /shared also at root —
+      # that's only ONE level apart and reliably crashes `npm ci`/`npm
+      # install` with "Cannot read properties of undefined (reading
+      # 'extraneous')" (confirmed empirically). Equally, do NOT move shared
+      # to /repo/shared — that would put it back at only one level from
+      # /repo/app.
       - ./backend/shared:/shared
     restart: unless-stopped
     depends_on:
@@ -145,11 +155,13 @@ services:
 
   incident-service:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /repo/app
     command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
     volumes:
-      - ./backend/services/incident-service:/app
-      - incident_dev_node_modules:/app/node_modules
+      - ./backend/services/incident-service:/repo/app
+      - incident_dev_node_modules:/repo/app/node_modules
+      # See identity-service's block above for why this must be /repo/app +
+      # /shared (root), not /app + /shared.
       - ./backend/shared:/shared
     restart: unless-stopped
     depends_on:
@@ -205,11 +217,13 @@ services:
   # stop working here, restart the container manually after editing.
   playbook-service:
     image: node:20-slim
-    working_dir: /app
+    working_dir: /repo/app
     command: sh -c "apt-get update >/dev/null && apt-get install -y --no-install-recommends openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:nodemon"
     volumes:
-      - ./backend/services/playbook-service:/app
-      - playbook_dev_node_modules:/app/node_modules
+      - ./backend/services/playbook-service:/repo/app
+      - playbook_dev_node_modules:/repo/app/node_modules
+      # See identity-service's block above for why this must be /repo/app +
+      # /shared (root), not /app + /shared.
       - ./backend/shared:/shared
     restart: unless-stopped
     depends_on:
@@ -251,11 +265,13 @@ services:
 
   audit-service:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /repo/app
     command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
     volumes:
-      - ./backend/services/audit-service:/app
-      - audit_dev_node_modules:/app/node_modules
+      - ./backend/services/audit-service:/repo/app
+      - audit_dev_node_modules:/repo/app/node_modules
+      # See identity-service's block above for why this must be /repo/app +
+      # /shared (root), not /app + /shared.
       - ./backend/shared:/shared
     restart: unless-stopped
     depends_on:
@@ -285,11 +301,13 @@ services:
   # See backend/services/integration-service.
   integration-service:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /repo/app
     command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
     volumes:
-      - ./backend/services/integration-service:/app
-      - integration_dev_node_modules:/app/node_modules
+      - ./backend/services/integration-service:/repo/app
+      - integration_dev_node_modules:/repo/app/node_modules
+      # See identity-service's block above for why this must be /repo/app +
+      # /shared (root), not /app + /shared.
       - ./backend/shared:/shared
     restart: unless-stopped
     depends_on:
@@ -323,11 +341,13 @@ services:
   # services). See backend/services/alert-ingestion-service.
   alert-ingestion-service:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /repo/app
     command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
     volumes:
-      - ./backend/services/alert-ingestion-service:/app
-      - alert_ingestion_dev_node_modules:/app/node_modules
+      - ./backend/services/alert-ingestion-service:/repo/app
+      - alert_ingestion_dev_node_modules:/repo/app/node_modules
+      # See identity-service's block above for why this must be /repo/app +
+      # /shared (root), not /app + /shared.
       - ./backend/shared:/shared
     restart: unless-stopped
     depends_on:
@@ -365,11 +385,13 @@ services:
   # handing off to alert-ingestion-service's own machine-to-machine route.
   normalization-service:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /repo/app
     command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
     volumes:
-      - ./backend/services/normalization-service:/app
-      - normalization_dev_node_modules:/app/node_modules
+      - ./backend/services/normalization-service:/repo/app
+      - normalization_dev_node_modules:/repo/app/node_modules
+      # See identity-service's block above for why this must be /repo/app +
+      # /shared (root), not /app + /shared.
       - ./backend/shared:/shared
     restart: unless-stopped
     depends_on:
@@ -398,6 +420,44 @@ services:
     ports:
       - "4700:4700"
 
+  # STIX/TAXII 2.1 feed ingestion, the IOC/STIX-object store, and a lookup
+  # API for future playbook connector / normalization-service enrichment
+  # consumers. See backend/services/threat-intelligence-service.
+  threat-intelligence-service:
+    image: node:20-alpine
+    working_dir: /repo/app
+    command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
+    volumes:
+      - ./backend/services/threat-intelligence-service:/repo/app
+      - threat_intelligence_dev_node_modules:/repo/app/node_modules
+      # See identity-service's block above for why this must be /repo/app +
+      # /shared (root), not /app + /shared.
+      - ./backend/shared:/shared
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_started
+    environment:
+      PORT: 4800
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: threat_intelligence_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      CREDENTIAL_ENCRYPTION_KEY: ${THREAT_INTEL_CREDENTIAL_ENCRYPTION_KEY:?THREAT_INTEL_CREDENTIAL_ENCRYPTION_KEY is required, copy .env.example to .env and set it}
+      THREAT_INTELLIGENCE_SERVICE_TOKEN: ${THREAT_INTELLIGENCE_SERVICE_TOKEN:?THREAT_INTELLIGENCE_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4800:4800"
+
   # No healthcheck on the services above (a bare node:20-alpine image has
   # no wget/curl without an extra apk add), so downstream depends_on here use
   # service_started, not service_healthy — identity-service/incident-service/
@@ -422,6 +482,7 @@ services:
       - integration-service
       - alert-ingestion-service
       - normalization-service
+      - threat-intelligence-service
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
@@ -431,16 +492,19 @@ services:
       INTEGRATION_SERVICE_URL: http://integration-service:4300
       ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500
       NORMALIZATION_SERVICE_URL: http://normalization-service:4700
+      THREAT_INTELLIGENCE_SERVICE_URL: http://threat-intelligence-service:4800
     ports:
       - "8090:8000"
 
   notification-service:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /repo/app
     command: sh -c "apk add --no-cache openssl >/dev/null && npm ci && npx prisma generate && npx prisma migrate deploy && npm run dev:polling"
     volumes:
-      - ./backend/services/notification-service:/app
-      - notification_dev_node_modules:/app/node_modules
+      - ./backend/services/notification-service:/repo/app
+      - notification_dev_node_modules:/repo/app/node_modules
+      # See identity-service's block above for why this must be /repo/app +
+      # /shared (root), not /app + /shared.
       - ./backend/shared:/shared
     restart: unless-stopped
     depends_on:
@@ -491,6 +555,7 @@ volumes:
   integration_dev_node_modules:
   alert_ingestion_dev_node_modules:
   normalization_dev_node_modules:
+  threat_intelligence_dev_node_modules:
   gateway_dev_node_modules:
   notification_dev_node_modules:
   frontend_dev_node_modules:
