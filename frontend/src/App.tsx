@@ -10,6 +10,9 @@ import { AlertsListPage } from '@/features/alerts/AlertsListPage'
 import { ConnectorsPage } from '@/features/connectors/ConnectorsPage'
 import { PlaybooksListPage } from '@/features/playbooks/PlaybooksListPage'
 import { PlaybookDesignerPage } from '@/features/playbooks/PlaybookDesignerPage'
+import { TaxiiServersListPage } from '@/features/threatIntel/TaxiiServersListPage'
+import { TaxiiServerDetailPage } from '@/features/threatIntel/TaxiiServerDetailPage'
+import { IocSearchPage } from '@/features/threatIntel/IocSearchPage'
 import { UsersListPage } from '@/features/users/UsersListPage'
 import { UserDetailPage } from '@/features/users/UserDetailPage'
 import { DepartmentsListPage } from '@/features/departments/DepartmentsListPage'
@@ -45,6 +48,10 @@ function App() {
           <Route path="playbooks" element={<PlaybooksListPage />} />
           <Route path="playbooks/new" element={<PlaybookDesignerPage />} />
           <Route path="playbooks/:key/edit" element={<PlaybookDesignerPage />} />
+
+          <Route path="threat-intel" element={<TaxiiServersListPage />} />
+          <Route path="threat-intel/servers/:id" element={<TaxiiServerDetailPage />} />
+          <Route path="threat-intel/iocs" element={<IocSearchPage />} />
 
           <Route path="users" element={<UsersListPage />} />
           <Route path="users/:id" element={<UserDetailPage />} />

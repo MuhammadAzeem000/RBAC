@@ -95,3 +95,11 @@ const ALERT_STATUS_LABEL: Record<string, string> = {
 export function AlertStatusBadge({ status }: { status: string }) {
   return <Badge tone={ALERT_STATUS_TONE[status] ?? 'slate'}>{ALERT_STATUS_LABEL[status] ?? status}</Badge>
 }
+
+const POLL_STATUS_TONE: Record<string, Tone> = { succeeded: 'green', failed: 'red' }
+const POLL_STATUS_LABEL: Record<string, string> = { succeeded: 'Succeeded', failed: 'Failed' }
+
+export function PollStatusBadge({ status }: { status: string | null }) {
+  if (!status) return <Badge tone="slate">Never polled</Badge>
+  return <Badge tone={POLL_STATUS_TONE[status] ?? 'slate'}>{POLL_STATUS_LABEL[status] ?? status}</Badge>
+}
