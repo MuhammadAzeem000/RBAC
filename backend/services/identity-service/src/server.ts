@@ -91,6 +91,10 @@ void ensureModuleSeeded(MODULE_NAMES.APPROVALS, 11);
 // playbook is gated separately from running one (Incidents).
 void ensureModuleSeeded(MODULE_NAMES.PLAYBOOKS, 12);
 
+// Same backfill for the Threat Intel module — STIX/TAXII feed config and
+// IOC browsing (threat-intelligence-service).
+void ensureModuleSeeded(MODULE_NAMES.THREAT_INTEL, 13);
+
 // Backfills the Tenants module/permissions the same way, but deliberately
 // does NOT grant them to "Administrator" (see MODULE_NAMES.TENANTS) — nobody
 // can manage tenants until a real platform operator is granted this

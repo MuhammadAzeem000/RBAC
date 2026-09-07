@@ -19,6 +19,7 @@ const MODULES = [
   { name: MODULE_NAMES.CONNECTORS, sortOrder: 10 },
   { name: MODULE_NAMES.APPROVALS, sortOrder: 11 },
   { name: MODULE_NAMES.PLAYBOOKS, sortOrder: 12 },
+  { name: MODULE_NAMES.THREAT_INTEL, sortOrder: 13 },
 ] as const;
 
 const ACTIONS = [

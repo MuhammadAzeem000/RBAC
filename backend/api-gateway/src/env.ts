@@ -15,6 +15,7 @@ const envSchema = z.object({
   INTEGRATION_SERVICE_URL: z.string().url().default("http://localhost:4300"),
   ALERT_INGESTION_SERVICE_URL: z.string().url().default("http://localhost:4500"),
   NORMALIZATION_SERVICE_URL: z.string().url().default("http://localhost:4700"),
+  THREAT_INTELLIGENCE_SERVICE_URL: z.string().url().default("http://localhost:4800"),
 });
 
 export const env = envSchema.parse(process.env);

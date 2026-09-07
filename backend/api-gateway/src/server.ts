@@ -96,6 +96,18 @@ app.use(
   }),
 );
 
+// Threat intelligence moved into its own service — STIX/TAXII feed
+// ingestion, the IOC store, and the lookup API. Same prefix-ordering
+// requirement as the carve-outs above.
+app.use(
+  "/api/v1/threat-intel",
+  createProxyMiddleware({
+    target: env.THREAT_INTELLIGENCE_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: { "^/": "/api/v1/threat-intel/" },
+  }),
+);
+
 app.use(
   "/api/v1",
   createProxyMiddleware({
@@ -142,6 +154,7 @@ app.listen(env.PORT, () => {
   console.log(`  /api/v1/policies/*         -> ${env.PLAYBOOK_SERVICE_URL}`);
   console.log(`  /api/v1/webhook-sources/*  -> ${env.NORMALIZATION_SERVICE_URL}`);
   console.log(`  /api/v1/normalize/*        -> ${env.NORMALIZATION_SERVICE_URL}`);
+  console.log(`  /api/v1/threat-intel/*     -> ${env.THREAT_INTELLIGENCE_SERVICE_URL}`);
   console.log(`  /api/v1/*                  -> ${env.INCIDENT_SERVICE_URL}`);
   console.log(`  /api/audit-logs* -> ${env.AUDIT_SERVICE_URL}`);
   console.log(`  /api/connectors* -> ${env.INTEGRATION_SERVICE_URL}`);

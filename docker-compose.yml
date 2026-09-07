@@ -394,14 +394,53 @@ services:
       retries: 10
       start_period: 10s
 
+  # STIX/TAXII 2.1 feed ingestion, the STIX-inspired IOC/object store, and a
+  # lookup API for future playbook connector / normalization-service
+  # enrichment consumers. See backend/services/threat-intelligence-service.
+  threat-intelligence-service:
+    build:
+      context: .
+      dockerfile: backend/services/threat-intelligence-service/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+    environment:
+      PORT: 4800
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-commtel}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, copy .env.example to .env and set it}
+      DB_NAME: threat_intelligence_db
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required, copy .env.example to .env and set it}
+      CREDENTIAL_ENCRYPTION_KEY: ${THREAT_INTEL_CREDENTIAL_ENCRYPTION_KEY:?THREAT_INTEL_CREDENTIAL_ENCRYPTION_KEY is required, copy .env.example to .env and set it}
+      THREAT_INTELLIGENCE_SERVICE_TOKEN: ${THREAT_INTELLIGENCE_SERVICE_TOKEN:?THREAT_INTELLIGENCE_SERVICE_TOKEN is required, copy .env.example to .env and set it}
+      IDENTITY_SERVICE_URL: http://identity-service:4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "4800:4800"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4800/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   # Reverse proxy: the single origin the frontend talks to. Routes
   # "/api/v1/alerts*" (alert-ingestion-service), "/api/v1/playbook-catalog*"
   # /"/api/v1/playbook-runs*"/"/api/v1/approvals*" (playbook-service),
-  # "/api/v1/webhook-sources*"/"/api/v1/normalize*" (normalization-service)
-  # and the rest of "/api/v1/*" (incident-service's documented REST
-  # surface), "/api/audit-logs*" (audit-service, the single authoritative
-  # audit-log store), and "/api/connectors*" (integration-service) to their
-  # respective services, and everything else under "/api" to identity-service.
+  # "/api/v1/webhook-sources*"/"/api/v1/normalize*" (normalization-service),
+  # "/api/v1/threat-intel*" (threat-intelligence-service) and the rest of
+  # "/api/v1/*" (incident-service's documented REST surface),
+  # "/api/audit-logs*" (audit-service, the single authoritative audit-log
+  # store), and "/api/connectors*" (integration-service) to their respective
+  # services, and everything else under "/api" to identity-service.
   api-gateway:
     build:
       context: .
@@ -422,6 +461,8 @@ services:
         condition: service_healthy
       normalization-service:
         condition: service_healthy
+      threat-intelligence-service:
+        condition: service_healthy
     environment:
       PORT: 8000
       IDENTITY_SERVICE_URL: http://identity-service:4000
@@ -431,6 +472,7 @@ services:
       INTEGRATION_SERVICE_URL: http://integration-service:4300
       ALERT_INGESTION_SERVICE_URL: http://alert-ingestion-service:4500
       NORMALIZATION_SERVICE_URL: http://normalization-service:4700
+      THREAT_INTELLIGENCE_SERVICE_URL: http://threat-intelligence-service:4800
     ports:
       - "8090:8000"
 

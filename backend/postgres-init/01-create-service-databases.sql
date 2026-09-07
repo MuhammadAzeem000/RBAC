@@ -26,3 +26,6 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'playbook_db')\gexec
 
 SELECT 'CREATE DATABASE normalization_db'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'normalization_db')\gexec
+
+SELECT 'CREATE DATABASE threat_intelligence_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'threat_intelligence_db')\gexec

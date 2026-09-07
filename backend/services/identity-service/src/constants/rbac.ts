@@ -23,6 +23,7 @@ export const MODULE_NAMES = {
   CONNECTORS: "Connectors",
   APPROVALS: "Approvals",
   PLAYBOOKS: "Playbooks",
+  THREAT_INTEL: "Threat Intel",
 } as const;
 
 export const ACTION_NAMES = {

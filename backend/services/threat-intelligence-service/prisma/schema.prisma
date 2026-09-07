@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// One configured TAXII 2.1 server connection per tenant. `discoveryUrl` is
+// the server's own /taxii2/ discovery endpoint; `apiRoot` is resolved lazily
+// on first discovery and cached here so later polls skip the discovery
+// round-trip. Credentials (basic/bearer) are encrypted at rest with the same
+// AES-256-GCM scheme integration-service uses for connector credentials —
+// see src/lib/crypto.ts — an explicit stand-in for a real secrets manager
+// (Vault/cloud KMS), not one itself.
+model TaxiiServer {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  name         String  @db.VarChar(150)
+  discoveryUrl String  @map("discovery_url") @db.VarChar(500)
+  apiRoot      String? @map("api_root") @db.VarChar(500)
+
+  authType            String  @default("none") @map("auth_type") @db.VarChar(20) // none | basic | bearer
+  encryptedCredential String? @map("encrypted_credential") @db.Text
+
+  status String @default("enabled") @db.VarChar(20) // enabled | disabled
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  collections TaxiiCollection[]
+
+  @@unique([tenantId, discoveryUrl])
+  @@index([tenantId])
+  @@map("taxii_servers")
+}
+
+// Config + incremental-poll cursor state for one polled TAXII collection.
+// `collectionId` is the TAXII collection's own "id" (a UUID per the spec),
+// not this row's own primary key. `lastAddedAfter`/`lastNextToken` persist
+// where the last successful poll left off so a restart resumes rather than
+// re-ingesting the whole feed — see src/services/taxiiPoller.service.ts.
+model TaxiiCollection {
+  id BigInt @id @default(autoincrement())
+
+  tenantId      BigInt @map("tenant_id")
+  taxiiServerId BigInt @map("taxii_server_id")
+
+  collectionId String  @map("collection_id") @db.VarChar(255)
+  title        String? @db.VarChar(255)
+
+  pollIntervalSeconds Int    @default(900) @map("poll_interval_seconds")
+  status              String @default("enabled") @db.VarChar(20) // enabled | disabled
+
+  lastAddedAfter DateTime? @map("last_added_after") @db.Timestamp(6)
+  lastNextToken  String?   @map("last_next_token") @db.VarChar(500)
+  lastPolledAt   DateTime? @map("last_polled_at") @db.Timestamp(6)
+  lastPollStatus String?   @map("last_poll_status") @db.VarChar(20) // succeeded | failed
+  lastPollError  String?   @map("last_poll_error") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  taxiiServer TaxiiServer @relation(fields: [taxiiServerId], references: [id])
+
+  @@unique([tenantId, taxiiServerId, collectionId])
+  @@index([tenantId])
+  @@map("taxii_collections")
+}
+
+// The STIX 2.1-inspired object store. Deliberately one polymorphic table
+// rather than one per STIX type (indicator/malware/threat-actor/
+// attack-pattern/relationship/identity in v1) — STIX is extensible, and a
+// rigid per-type schema would need a migration for every future type. `raw`
+// preserves the full STIX object verbatim; `iocType`/`iocValue` are extracted
+// at ingest time (src/lib/stixPatternParser.ts) only for `indicator` objects
+// whose pattern is a simple equality match, since "does this IOC value
+// exist" is the primary access pattern a future connector/enrichment lookup
+// needs — see the @@index below.
+model StixObject {
+  id BigInt @id @default(autoincrement())
+
+  tenantId    BigInt @map("tenant_id")
+  stixId      String @map("stix_id") @db.VarChar(255) // e.g. indicator--<uuid>
+  specVersion String @default("2.1") @map("spec_version") @db.VarChar(10)
+  type        String @db.VarChar(50) // indicator | malware | threat-actor | attack-pattern | relationship | identity
+
+  iocType  String? @map("ioc_type") @db.VarChar(50) // ipv4-addr | domain-name | url | file:hashes.'SHA-256' | ...
+  iocValue String? @map("ioc_value") @db.VarChar(2048)
+  pattern  String? @db.Text // raw STIX pattern string, indicators only
+
+  labels     String[]
+  confidence Int?
+  firstSeen  DateTime? @map("first_seen") @db.Timestamp(6)
+  lastSeen   DateTime? @map("last_seen") @db.Timestamp(6)
+  revoked    Boolean   @default(false)
+
+  raw Json @db.JsonB // the full STIX 2.1 object, verbatim
+
+  taxiiServerId     BigInt? @map("taxii_server_id")
+  taxiiCollectionId BigInt? @map("taxii_collection_id")
+  sourceFeedName    String? @map("source_feed_name") @db.VarChar(255)
+
+  ingestedAt DateTime  @default(now()) @map("ingested_at") @db.Timestamp(6)
+  updatedAt  DateTime? @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@unique([tenantId, stixId])
+  @@index([tenantId, type])
+  @@index([tenantId, iocType, iocValue])
+  @@index([tenantId, taxiiCollectionId])
+  @@map("stix_objects")
+}
+
+// Transactional outbox: every StixObject upsert of type "indicator" writes
+// its matching OutboxEvent row in the SAME database transaction, so the two
+// can never diverge — identical pattern to integration-service's
+// src/services/outbox.service.ts / outboxPublisher.service.ts.
+model OutboxEvent {
+  id BigInt @id @default(autoincrement())
+
+  tenantId BigInt @map("tenant_id")
+
+  eventId       String @unique @map("event_id") @db.VarChar(36)
+  eventType     String @map("event_type") @db.VarChar(100)
+  aggregateType String @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String @map("aggregate_id") @db.VarChar(100)
+
+  actorId   String? @map("actor_id") @db.VarChar(100)
+  actorType String  @default("SYSTEM") @map("actor_type") @db.VarChar(20)
+
+  action       String @db.VarChar(50)
+  resourceType String @map("resource_type") @db.VarChar(50)
+  resourceId   String @map("resource_id") @db.VarChar(100)
+
+  metadata Json? @db.Json
+  payload  Json? @db.Json
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamp(6)
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error") @db.Text
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}

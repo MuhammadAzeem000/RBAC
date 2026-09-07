@@ -6,4 +6,5 @@ export * from "./types/playbook";
 export * from "./types/connector";
 export * from "./types/execution";
 export * from "./types/approval";
+export * from "./types/threatIntel";
 export * from "./prisma/tenantScope";
