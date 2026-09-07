@@ -1,4 +1,4 @@
-import { lookupIoc, searchIocs } from "./iocLookup.service";
+import { lookupIoc, searchIocs } from "../services/iocLookup.service";
 import { TenantScopedPrisma } from "../middlewares/tenantContext";
 
 function buildMockDb(findFirstResult: unknown) {

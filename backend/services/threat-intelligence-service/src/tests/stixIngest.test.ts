@@ -1,4 +1,4 @@
-import { ingestStixObject } from "./stixIngest.service";
+import { ingestStixObject } from "../services/stixIngest.service";
 import { TenantScopedPrisma } from "../middlewares/tenantContext";
 
 function buildMockDb(upsertResult: { id: bigint }) {
